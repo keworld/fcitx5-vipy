@@ -25,6 +25,15 @@
 namespace vipy::fcitx_wrapper {
 namespace {
 
+std::string lowercaseAscii(std::string value) {
+    for (char &ch : value) {
+        if (ch >= 'A' && ch <= 'Z') {
+            ch = static_cast<char>(ch - 'A' + 'a');
+        }
+    }
+    return value;
+}
+
 class PythonEngine {
 public:
     PythonEngine() {
@@ -191,7 +200,13 @@ public:
             commitAndReset(ic); return;
         }
         if (sym == FcitxKey_BackSpace) { backspace(ic, event); return; }
-        if (sym == FcitxKey_space) { commitAndReset(ic); event.filterAndAccept(); return; }
+        if (sym == FcitxKey_space) {
+            if (!current_.empty()) {
+                commitAndReset(ic, " ");
+                event.filterAndAccept();
+            }
+            return;
+        }
         const bool letter = (sym >= 'a' && sym <= 'z') || (sym >= 'A' && sym <= 'Z');
         const bool digit = *config_.inputMethod == InputMethod::Vni && sym >= '1' && sym <= '9';
         if (!ic || (!letter && !digit)) { commitAndReset(ic); return; }
@@ -231,13 +246,13 @@ private:
         updatePreedit(ic);
         event.filterAndAccept();
     }
-    void commitAndReset(fcitx::InputContext *ic) {
+    void commitAndReset(fcitx::InputContext *ic, const std::string &suffix = {}) {
         if (ic && !current_.empty()) {
             const bool valid = engine_.hasMarks(current_) && engine_.isValidWord(current_);
             const bool dictionaryMatch = *config_.inputMethod == InputMethod::Vni ||
-                SyllableDict::contains(current_);
+                SyllableDict::contains(lowercaseAscii(current_));
             const std::string &out = valid && dictionaryMatch ? current_ : raw_;
-            ic->commitString(out);
+            ic->commitString(out + suffix);
         }
         resetState(ic);
     }
