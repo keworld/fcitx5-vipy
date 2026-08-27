@@ -1,0 +1,9 @@
+build/
+.cache/
+.idea
+*.so
+*.o
+*.hpp
+*.gperf
+compile_commands.json
+cmake-build-debug/
