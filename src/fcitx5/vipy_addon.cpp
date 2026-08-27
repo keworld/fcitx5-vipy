@@ -7,6 +7,7 @@
 #include <fcitx/addonmanager.h>
 #include <fcitx/event.h>
 #include <fcitx/inputcontext.h>
+#include <fcitx/inputcontextproperty.h>
 #include <fcitx/inputmethodengine.h>
 #include <fcitx/inputpanel.h>
 #include <fcitx/instance.h>
@@ -229,6 +230,111 @@ private:
     void *pythonHandle_ = nullptr;
 };
 
+class VipyState final : public fcitx::InputContextProperty {
+public:
+    VipyState(PythonEngine *engine, VipyConfig *config, fcitx::InputContext *ic)
+        : engine_(*engine), config_(*config), ic_(ic) {}
+
+    void keyEvent(fcitx::KeyEvent &event) {
+        if (event.isRelease()) return;
+        const auto sym = event.key().sym();
+        if (event.key().states().test(fcitx::KeyState::Ctrl) ||
+            event.key().states().test(fcitx::KeyState::Alt) ||
+            event.key().states().test(fcitx::KeyState::Super)) {
+            commitAndReset();
+            return;
+        }
+        if (sym == FcitxKey_BackSpace) {
+            backspace(event);
+            return;
+        }
+        if (sym == FcitxKey_space) {
+            if (!current_.empty()) {
+                commitAndReset(" ");
+                event.filterAndAccept();
+            }
+            return;
+        }
+
+        const bool letter = (sym >= 'a' && sym <= 'z') ||
+                            (sym >= 'A' && sym <= 'Z');
+        const bool digit = *config_.inputMethod == InputMethod::Vni &&
+                           sym >= '1' && sym <= '9';
+        if (!letter && !digit) {
+            commitAndReset();
+            return;
+        }
+        if (current_.size() >= 32) {
+            commitAndReset();
+        }
+
+        const char key = static_cast<char>(sym);
+        const std::string next = engine_.processWord(current_, key);
+        if (next.empty()) {
+            commitAndReset();
+            return;
+        }
+        current_ = next;
+        raw_.push_back(key);
+        updatePreedit();
+        event.filterAndAccept();
+    }
+
+    void reset() {
+        current_.clear();
+        raw_.clear();
+        updatePreedit();
+    }
+
+    void commitAndReset(const std::string &suffix = {}) {
+        if (ic_ && !current_.empty()) {
+            const bool valid = engine_.hasMarks(current_) &&
+                               engine_.isValidWord(current_);
+            const std::string normalized = lowercaseVietnamese(current_);
+            const bool dictionaryMatch =
+                *config_.inputMethod == InputMethod::Vni ||
+                SyllableDict::contains(normalized);
+            const std::string &out = valid && dictionaryMatch ? current_ : raw_;
+            ic_->commitString(out + suffix);
+        }
+        reset();
+    }
+
+private:
+    void updatePreedit() {
+        if (!ic_) return;
+        auto &panel = ic_->inputPanel();
+        if (current_.empty()) {
+            panel.reset();
+            ic_->updatePreedit();
+            return;
+        }
+        fcitx::Text text(current_, fcitx::TextFormatFlags{
+            fcitx::TextFormatFlag::Underline,
+            fcitx::TextFormatFlag::DontCommit});
+        text.setCursor(static_cast<int>(current_.size()));
+        panel.setClientPreedit(text);
+        ic_->updatePreedit();
+    }
+
+    void backspace(fcitx::KeyEvent &event) {
+        if (raw_.empty()) return;
+        raw_.pop_back();
+        current_.clear();
+        for (char key : raw_) {
+            current_ = engine_.processWord(current_, key);
+        }
+        updatePreedit();
+        event.filterAndAccept();
+    }
+
+    PythonEngine &engine_;
+    VipyConfig &config_;
+    fcitx::InputContext *ic_;
+    std::string current_;
+    std::string raw_;
+};
+
 class ModeAction : public fcitx::Action {
 public:
     ModeAction(std::string text, std::function<bool()> checked,
@@ -248,10 +354,16 @@ private:
 class VietnameseInputMethodEngine : public fcitx::InputMethodEngineV2 {
 public:
     explicit VietnameseInputMethodEngine(fcitx::Instance *instance)
-        : telexAction_("Telex", [this] { return *config_.inputMethod == InputMethod::Telex; },
+        : instance_(instance),
+          stateFactory_([this](fcitx::InputContext &ic) {
+              return new VipyState(&engine_, &config_, &ic);
+          }),
+          telexAction_("Telex", [this] { return *config_.inputMethod == InputMethod::Telex; },
                        [this](auto *ic) { switchMode(InputMethod::Telex, ic); }),
           vniAction_("VNI", [this] { return *config_.inputMethod == InputMethod::Vni; },
                      [this](auto *ic) { switchMode(InputMethod::Vni, ic); }) {
+        instance->inputContextManager().registerProperty("VipyState",
+                                                         &stateFactory_);
         auto &ui = instance->userInterfaceManager();
         if (!ui.registerAction("vipy-input-method", &modeAction_) ||
             !ui.registerAction("vipy-input-method-telex", &telexAction_) ||
@@ -270,7 +382,7 @@ public:
     void setConfig(const fcitx::RawConfig &config) override {
         config_.load(config, true);
         engine_.setSchema(*config_.inputMethod);
-        resetState(nullptr);
+        resetAllStates();
         safeSaveAsIni(config_, "conf/vipy.conf");
     }
     void reloadConfig() override {
@@ -296,83 +408,33 @@ public:
         resetState(event.inputContext());
     }
     void keyEvent(const fcitx::InputMethodEntry &, fcitx::KeyEvent &event) override {
-        if (event.isRelease()) return;
         auto *ic = event.inputContext();
-        const auto sym = event.key().sym();
-        if (event.key().states().test(fcitx::KeyState::Ctrl) ||
-            event.key().states().test(fcitx::KeyState::Alt) ||
-            event.key().states().test(fcitx::KeyState::Super)) {
-            commitAndReset(ic); return;
-        }
-        if (sym == FcitxKey_BackSpace) { backspace(ic, event); return; }
-        if (sym == FcitxKey_space) {
-            if (!current_.empty()) {
-                commitAndReset(ic, " ");
-                event.filterAndAccept();
-            }
-            return;
-        }
-        const bool letter = (sym >= 'a' && sym <= 'z') || (sym >= 'A' && sym <= 'Z');
-        const bool digit = *config_.inputMethod == InputMethod::Vni && sym >= '1' && sym <= '9';
-        if (!ic || (!letter && !digit)) { commitAndReset(ic); return; }
-        if (current_.size() >= 32) commitAndReset(ic);
-        const char key = static_cast<char>(sym);
-        const std::string next = engine_.processWord(current_, key);
-        if (next.empty()) {
-            commitAndReset(ic);
-            return;
-        }
-        current_ = next;
-        raw_.push_back(key);
-        updatePreedit(ic);
-        event.filterAndAccept();
+        if (!ic) return;
+        ic->propertyFor(&stateFactory_)->keyEvent(event);
     }
 
 private:
     void switchMode(InputMethod mode, fcitx::InputContext *ic) {
         if (*config_.inputMethod == mode) return;
-        commitAndReset(ic);
+        if (ic) ic->propertyFor(&stateFactory_)->commitAndReset();
         config_.inputMethod.setValue(mode);
         engine_.setSchema(mode);
         safeSaveAsIni(config_, "conf/vipy.conf");
     }
-    void updatePreedit(fcitx::InputContext *ic) const {
-        if (!ic) return;
-        auto &panel = ic->inputPanel();
-        if (current_.empty()) { panel.reset(); ic->updatePreedit(); return; }
-        fcitx::Text text(current_, fcitx::TextFormatFlags{
-            fcitx::TextFormatFlag::Underline, fcitx::TextFormatFlag::DontCommit});
-        text.setCursor(static_cast<int>(current_.size()));
-        panel.setClientPreedit(text);
-        ic->updatePreedit();
-    }
-    void backspace(fcitx::InputContext *ic, fcitx::KeyEvent &event) {
-        if (raw_.empty()) return;
-        raw_.pop_back();
-        current_.clear();
-        for (char key : raw_) current_ = engine_.processWord(current_, key);
-        updatePreedit(ic);
-        event.filterAndAccept();
-    }
-    void commitAndReset(fcitx::InputContext *ic, const std::string &suffix = {}) {
-        if (ic && !current_.empty()) {
-            const bool valid = engine_.hasMarks(current_) && engine_.isValidWord(current_);
-            const std::string normalized = lowercaseVietnamese(current_);
-            const bool dictionaryMatch = *config_.inputMethod == InputMethod::Vni ||
-                SyllableDict::contains(normalized);
-            const std::string &out = valid && dictionaryMatch ? current_ : raw_;
-            ic->commitString(out + suffix);
-        }
-        resetState(ic);
-    }
     void resetState(fcitx::InputContext *ic) {
-        current_.clear(); raw_.clear(); updatePreedit(ic);
+        if (ic) ic->propertyFor(&stateFactory_)->reset();
+    }
+    void resetAllStates() {
+        instance_->inputContextManager().foreach([this](fcitx::InputContext *ic) {
+            ic->propertyFor(&stateFactory_)->reset();
+            return true;
+        });
     }
 
+    fcitx::Instance *instance_;
     PythonEngine engine_;
-    std::string current_;
-    std::string raw_;
     VipyConfig config_;
+    fcitx::FactoryFor<VipyState> stateFactory_;
     fcitx::Menu modeMenu_;
     fcitx::SimpleAction modeAction_;
     ModeAction telexAction_;
