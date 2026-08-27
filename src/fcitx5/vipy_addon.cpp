@@ -25,13 +25,49 @@
 namespace vipy::fcitx_wrapper {
 namespace {
 
-std::string lowercaseAscii(std::string value) {
-    for (char &ch : value) {
-        if (ch >= 'A' && ch <= 'Z') {
-            ch = static_cast<char>(ch - 'A' + 'a');
+std::string lowercaseVietnamese(std::string value) {
+    std::string result;
+    result.reserve(value.size());
+    for (size_t i = 0; i < value.size();) {
+        const auto first = static_cast<unsigned char>(value[i]);
+        if (first < 0x80) {
+            result.push_back(first >= 'A' && first <= 'Z'
+                                ? static_cast<char>(first - 'A' + 'a')
+                                : static_cast<char>(first));
+            ++i;
+            continue;
         }
+
+        size_t length = first < 0xE0 ? 2 : first < 0xF0 ? 3 : 4;
+        if (i + length > value.size()) {
+            result.append(value, i, std::string::npos);
+            break;
+        }
+        char32_t codepoint = first & (length == 2 ? 0x1F : length == 3 ? 0x0F : 0x07);
+        for (size_t j = 1; j < length; ++j) {
+            const auto byte = static_cast<unsigned char>(value[i + j]);
+            if ((byte & 0xC0) != 0x80) {
+                result.push_back(value[i++]);
+                codepoint = 0;
+                break;
+            }
+            codepoint = (codepoint << 6) | (byte & 0x3F);
+        }
+        if (!codepoint) {
+            continue;
+        }
+        if (codepoint == 0x0102 || codepoint == 0x00C2 ||
+            codepoint == 0x00CA || codepoint == 0x00D4 ||
+            codepoint == 0x0110 || codepoint == 0x01A0 ||
+            codepoint == 0x01AF ||
+            (codepoint >= 0x1EA0 && codepoint <= 0x1EF8 &&
+             (codepoint & 1) == 0)) {
+            ++codepoint;
+        }
+        utf8::encode(codepoint, result);
+        i += length;
     }
-    return value;
+    return result;
 }
 
 class PythonEngine {
@@ -156,9 +192,12 @@ public:
                      [this](auto *ic) { switchMode(InputMethod::Vni, ic); }) {
         auto &ui = instance->userInterfaceManager();
         ui.registerAction("vipy-input-method", &modeAction_);
+        ui.registerAction("vipy-input-method-telex", &telexAction_);
+        ui.registerAction("vipy-input-method-vni", &vniAction_);
         modeMenu_.addAction(&telexAction_);
         modeMenu_.addAction(&vniAction_);
         modeAction_.setShortText("Input Method");
+        modeAction_.setIcon("fcitx-vipy");
         modeAction_.setMenu(&modeMenu_);
         reloadConfig();
     }
@@ -250,7 +289,7 @@ private:
         if (ic && !current_.empty()) {
             const bool valid = engine_.hasMarks(current_) && engine_.isValidWord(current_);
             const bool dictionaryMatch = *config_.inputMethod == InputMethod::Vni ||
-                SyllableDict::contains(lowercaseAscii(current_));
+                SyllableDict::contains(lowercaseVietnamese(current_));
             const std::string &out = valid && dictionaryMatch ? current_ : raw_;
             ic->commitString(out + suffix);
         }
