@@ -53,7 +53,7 @@ target_compile_definitions(vipy PRIVATE
 )
 
 # Link thư viện Fcitx5
-target_link_libraries(vipy PRIVATE Fcitx5::Core Python3::Python)
+target_link_libraries(vipy PRIVATE Fcitx5::Core Python3::Python ${CMAKE_DL_LIBS})
 
 # Python loads extension modules (for example ``unicodedata``) while this
 # addon is loaded as a plugin.  Export libpython's symbols from the plugin so

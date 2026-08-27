@@ -1,5 +1,7 @@
 #include <Python.h>
 
+#include <dlfcn.h>
+
 #include <fcitx/action.h>
 #include <fcitx/addonfactory.h>
 #include <fcitx/addonmanager.h>
@@ -97,9 +99,28 @@ void logPythonError(const char *context) {
     Py_XDECREF(traceback);
 }
 
+void *makePythonSymbolsGlobal() {
+    Dl_info info{};
+    if (!dladdr(reinterpret_cast<void *>(&Py_Initialize), &info) ||
+        !info.dli_fname) {
+        FCITX_ERROR() << "Cannot locate the loaded libpython";
+        return nullptr;
+    }
+    void *handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_GLOBAL);
+    if (!handle) {
+        FCITX_ERROR() << "Cannot promote libpython symbols from "
+                      << info.dli_fname << ": " << dlerror();
+        return nullptr;
+    }
+    FCITX_INFO() << "Promoted libpython symbols globally from "
+                 << info.dli_fname;
+    return handle;
+}
+
 class PythonEngine {
 public:
     PythonEngine() {
+        pythonHandle_ = makePythonSymbolsGlobal();
         Py_Initialize();
         FCITX_INFO() << "Python initialized; module path: "
                      << VIPY_PYTHON_MODULE_DIR;
@@ -221,6 +242,7 @@ private:
 
     PyObject *module_ = nullptr;
     PyObject *engine_ = nullptr;
+    void *pythonHandle_ = nullptr;
 };
 
 class ModeAction : public fcitx::Action {
