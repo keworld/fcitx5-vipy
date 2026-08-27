@@ -1,9 +1,9 @@
 # Cài đặt file Addon configuration
-install(FILES vipy_addon.conf
+install(FILES vipy.conf
         DESTINATION ${FCITX_INSTALL_PKGDATADIR}/addon)
 
 # Cài đặt file Input Method configuration
-install(FILES vipy_inputmethod.conf
+install(FILES vi-vipy.conf
         DESTINATION ${FCITX_INSTALL_PKGDATADIR}/inputmethod)
 
 # Install the icon used by Fcitx5's input-method status item.
