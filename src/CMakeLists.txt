@@ -26,8 +26,6 @@ set_source_files_properties(${GENERATED_HEADER} PROPERTIES GENERATED TRUE)
 
 add_library(vipy MODULE
         # Headers (Khai báo để CLion nhận diện project target)
-        ${CMAKE_SOURCE_DIR}/include/vipy/char_buffer.hpp
-        ${CMAKE_SOURCE_DIR}/include/vipy/char_util.hpp
         ${CMAKE_SOURCE_DIR}/include/vipy/syllable_dict.hpp
         ${CMAKE_SOURCE_DIR}/include/vipy/utf8_helper.hpp
         ${CMAKE_SOURCE_DIR}/include/vipy/vipy_config.hpp
