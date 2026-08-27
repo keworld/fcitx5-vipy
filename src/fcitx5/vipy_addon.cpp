@@ -12,6 +12,7 @@
 #include <fcitx/statusarea.h>
 #include <fcitx/userinterfacemanager.h>
 #include <fcitx-config/iniparser.h>
+#include <fcitx-utils/log.h>
 
 #include "vipy/syllable_dict.hpp"
 #include "vipy/utf8_helper.hpp"
@@ -70,17 +71,57 @@ std::string lowercaseVietnamese(std::string value) {
     return result;
 }
 
+void logPythonError(const char *context) {
+    if (!PyErr_Occurred()) {
+        return;
+    }
+    PyObject *type = nullptr;
+    PyObject *value = nullptr;
+    PyObject *traceback = nullptr;
+    PyErr_Fetch(&type, &value, &traceback);
+    PyErr_NormalizeException(&type, &value, &traceback);
+    std::string message = "unknown Python exception";
+    if (value) {
+        PyObject *text = PyObject_Str(value);
+        if (text) {
+            const char *utf8 = PyUnicode_AsUTF8(text);
+            if (utf8) {
+                message = utf8;
+            }
+            Py_DECREF(text);
+        }
+    }
+    FCITX_ERROR() << context << ": " << message;
+    Py_XDECREF(type);
+    Py_XDECREF(value);
+    Py_XDECREF(traceback);
+}
+
 class PythonEngine {
 public:
     PythonEngine() {
         Py_Initialize();
+        FCITX_INFO() << "Python initialized; module path: "
+                     << VIPY_PYTHON_MODULE_DIR;
         PyGILState_STATE state = PyGILState_Ensure();
         auto *path = PySys_GetObject("path");
-        PyObject_CallMethod(path, "insert", "is", 0, VIPY_PYTHON_MODULE_DIR);
+        PyObject *insertResult = path
+            ? PyObject_CallMethod(path, "insert", "is", 0,
+                                  VIPY_PYTHON_MODULE_DIR)
+            : nullptr;
+        if (!insertResult) {
+            if (path) {
+                logPythonError("adding Python module path");
+            } else {
+                FCITX_ERROR() << "Python sys.path is unavailable";
+            }
+        }
+        Py_XDECREF(insertResult);
         module_ = PyImport_ImportModule("vietnamese_input_method");
         if (!module_) {
-            PyErr_Print();
+            logPythonError("importing vietnamese_input_method");
         } else {
+            FCITX_INFO() << "Imported vietnamese_input_method successfully";
             setSchema(InputMethod::Telex);
         }
         PyGILState_Release(state);
@@ -100,21 +141,28 @@ public:
         PyGILState_STATE state = PyGILState_Ensure();
         Py_XDECREF(engine_);
         engine_ = nullptr;
+        const char *schemaName = method == InputMethod::Telex
+            ? "TelexSchema" : "VNISchema";
+        FCITX_INFO() << "Selecting schema " << schemaName;
         if (module_) {
             PyObject *phon = PyObject_GetAttrString(module_, "PHON");
-            const char *schemaName = method == InputMethod::Telex
-                ? "TelexSchema" : "VNISchema";
             PyObject *schemaClass = PyObject_GetAttrString(module_, schemaName);
             PyObject *schema = schemaClass ? PyObject_CallNoArgs(schemaClass) : nullptr;
             PyObject *engineClass = PyObject_GetAttrString(module_, "VietnameseEngine");
             if (phon && schema && engineClass) {
                 engine_ = PyObject_CallFunctionObjArgs(engineClass, phon, schema, nullptr);
             }
+            if (!phon || !schemaClass || !schema || !engineClass || !engine_) {
+                logPythonError("creating Vietnamese engine");
+            } else {
+                FCITX_INFO() << "Schema " << schemaName << " is ready";
+            }
             Py_XDECREF(phon);
             Py_XDECREF(schemaClass);
             Py_XDECREF(schema);
             Py_XDECREF(engineClass);
-            if (!engine_) PyErr_Print();
+        } else {
+            FCITX_ERROR() << "Cannot select schema: Python module is unavailable";
         }
         PyGILState_Release(state);
     }
@@ -136,13 +184,18 @@ private:
                            const std::string &key = {}) const {
         PyGILState_STATE state = PyGILState_Ensure();
         std::string result;
-        if (engine_) {
+        if (!engine_) {
+            FCITX_ERROR() << "Cannot call Python " << name
+                          << ": engine is unavailable";
+        } else {
             PyObject *value = PyObject_CallMethod(engine_, name, "ss", word.c_str(), key.c_str());
             if (value && PyUnicode_Check(value)) {
                 const char *text = PyUnicode_AsUTF8(value);
                 if (text) result = text;
             } else if (!value) {
-                PyErr_Print();
+                logPythonError(name);
+            } else {
+                FCITX_ERROR() << name << " returned a non-string value";
             }
             Py_XDECREF(value);
         }
@@ -153,10 +206,13 @@ private:
     bool callBool(const char *name, const std::string &word) const {
         PyGILState_STATE state = PyGILState_Ensure();
         bool result = false;
-        if (engine_) {
+        if (!engine_) {
+            FCITX_ERROR() << "Cannot call Python " << name
+                          << ": engine is unavailable";
+        } else {
             PyObject *value = PyObject_CallMethod(engine_, name, "s", word.c_str());
             if (value) result = PyObject_IsTrue(value) != 0;
-            else PyErr_Print();
+            else logPythonError(name);
             Py_XDECREF(value);
         }
         PyGILState_Release(state);
@@ -191,9 +247,16 @@ public:
           vniAction_("VNI", [this] { return *config_.inputMethod == InputMethod::Vni; },
                      [this](auto *ic) { switchMode(InputMethod::Vni, ic); }) {
         auto &ui = instance->userInterfaceManager();
-        ui.registerAction("vipy-input-method", &modeAction_);
-        ui.registerAction("vipy-input-method-telex", &telexAction_);
-        ui.registerAction("vipy-input-method-vni", &vniAction_);
+        const bool parentRegistered =
+            ui.registerAction("vipy-input-method", &modeAction_);
+        const bool telexRegistered =
+            ui.registerAction("vipy-input-method-telex", &telexAction_);
+        const bool vniRegistered =
+            ui.registerAction("vipy-input-method-vni", &vniAction_);
+        FCITX_INFO() << "Action registration: parent=" << parentRegistered
+                     << " telex=" << telexRegistered << " vni=" << vniRegistered
+                     << " ids=" << modeAction_.id() << "/" << telexAction_.id()
+                     << "/" << vniAction_.id();
         modeMenu_.addAction(&telexAction_);
         modeMenu_.addAction(&vniAction_);
         modeAction_.setShortText("Input Method");
@@ -211,6 +274,9 @@ public:
     }
     void reloadConfig() override {
         readAsIni(config_, "conf/vipy.conf");
+        FCITX_INFO() << "Loaded input method configuration: "
+                     << (*config_.inputMethod == InputMethod::Telex
+                             ? "Telex" : "VNI");
         engine_.setSchema(*config_.inputMethod);
     }
     std::string subMode(const fcitx::InputMethodEntry &, fcitx::InputContext &) override {
@@ -223,8 +289,15 @@ public:
         return resolveIconPath({"fcitx-vipy"}, paths);
     }
     void activate(const fcitx::InputMethodEntry &, fcitx::InputContextEvent &event) override {
-        if (auto *ic = event.inputContext()) ic->statusArea().addAction(
-            fcitx::StatusGroup::InputMethod, &modeAction_);
+        if (auto *ic = event.inputContext()) {
+            ic->statusArea().addAction(
+                fcitx::StatusGroup::InputMethod, &modeAction_);
+            FCITX_DEBUG() << "Activated for input context; status action id="
+                          << modeAction_.id() << " menu actions="
+                          << modeMenu_.actions().size();
+        } else {
+            FCITX_WARN() << "Activate called without an input context";
+        }
     }
     void reset(const fcitx::InputMethodEntry &, fcitx::InputContextEvent &event) override {
         resetState(event.inputContext());
@@ -233,6 +306,8 @@ public:
         if (event.isRelease()) return;
         auto *ic = event.inputContext();
         const auto sym = event.key().sym();
+        FCITX_DEBUG() << "Key event: " << event.key() << " sym=" << sym
+                      << " current=" << current_ << " raw=" << raw_;
         if (event.key().states().test(fcitx::KeyState::Ctrl) ||
             event.key().states().test(fcitx::KeyState::Alt) ||
             event.key().states().test(fcitx::KeyState::Super)) {
@@ -252,7 +327,13 @@ public:
         if (current_.size() >= 32) commitAndReset(ic);
         const char key = static_cast<char>(sym);
         const std::string next = engine_.processWord(current_, key);
-        if (next.empty()) { commitAndReset(ic); return; }
+        if (next.empty()) {
+            FCITX_WARN() << "Python returned an empty result for key " << key
+                         << "; committing raw buffer";
+            commitAndReset(ic);
+            return;
+        }
+        FCITX_DEBUG() << "Processed key " << key << " => " << next;
         current_ = next;
         raw_.push_back(key);
         updatePreedit(ic);
@@ -262,6 +343,8 @@ public:
 private:
     void switchMode(InputMethod mode, fcitx::InputContext *ic) {
         if (*config_.inputMethod == mode) return;
+        FCITX_INFO() << "Switching input method to "
+                     << (mode == InputMethod::Telex ? "Telex" : "VNI");
         commitAndReset(ic);
         config_.inputMethod.setValue(mode);
         engine_.setSchema(mode);
@@ -288,9 +371,14 @@ private:
     void commitAndReset(fcitx::InputContext *ic, const std::string &suffix = {}) {
         if (ic && !current_.empty()) {
             const bool valid = engine_.hasMarks(current_) && engine_.isValidWord(current_);
+            const std::string normalized = lowercaseVietnamese(current_);
             const bool dictionaryMatch = *config_.inputMethod == InputMethod::Vni ||
-                SyllableDict::contains(lowercaseVietnamese(current_));
+                SyllableDict::contains(normalized);
             const std::string &out = valid && dictionaryMatch ? current_ : raw_;
+            FCITX_INFO() << "Commit: current=" << current_ << " raw=" << raw_
+                         << " normalized=" << normalized << " valid=" << valid
+                         << " dictionary=" << dictionaryMatch << " output="
+                         << out << suffix;
             ic->commitString(out + suffix);
         }
         resetState(ic);
