@@ -55,6 +55,11 @@ target_compile_definitions(vipy PRIVATE
 # Link thư viện Fcitx5
 target_link_libraries(vipy PRIVATE Fcitx5::Core Python3::Python)
 
+# Python loads extension modules (for example ``unicodedata``) while this
+# addon is loaded as a plugin.  Export libpython's symbols from the plugin so
+# those extensions can resolve symbols such as PyModule_Type.
+target_link_options(vipy PRIVATE "-Wl,-z,global")
+
 # Loại bỏ tiền tố 'lib' mặc định để sinh ra vipy.so thay vì libvipy.so
 set_target_properties(vipy PROPERTIES PREFIX "")
 
