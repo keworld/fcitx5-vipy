@@ -1,4 +1,4 @@
-# fcitx5-vicplex
+# fcitx5-vipy
 Fcitx5 Vietnamese Input Method \
 Bộ gõ tiếng Việt dành cho Fcitx5 trên Linux.
 
@@ -9,7 +9,8 @@ Bộ gõ tiếng Việt dành cho Fcitx5 trên Linux.
 ## 📋 Yêu cầu hệ thống
 - Linux (Arch Linux, Ubuntu, Debian,...)
 - Fcitx5 development libraries (`fcitx5`, `libfcitx5utils-dev`)
-- C++17 compiler (GCC / Clang)
+- C++20 compiler (GCC / Clang)
+- Python 3 development headers/runtime (used by the Fcitx5 wrapper)
 - CMake (>= 3.10)
 - gperf (dùng để sinh bảng tra cứu tối ưu tại thời điểm build)
 
@@ -29,8 +30,8 @@ sudo apt install libfcitx5utils-dev gperf cmake g++
 ```
 2. Clone repository:
 ```bash
-git clone https://github.com/keworld/fcitx5-vicplex.git
-cd fcitx5-vicplex
+git clone https://github.com/keworld/fcitx5-vipy.git
+cd fcitx5-vipy
 ```
 3. Tạo thư mục build và biên dịch:
 ```bash

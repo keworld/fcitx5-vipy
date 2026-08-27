@@ -13,68 +13,8 @@ import logging
 import unicodedata as ud
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from weakref import WeakKeyDictionary
-
-from PySide6.QtCore import QObject, QEvent, Qt
-from PySide6.QtWidgets import QLineEdit, QTextEdit, QPlainTextEdit, QApplication
-from PySide6.QtGui import QTextCursor
 
 logger = logging.getLogger(__name__)
-
-UNDO_MODIFIERS = Qt.ControlModifier | Qt.MetaModifier
-BLOCKED_MODIFIERS = Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
-
-
-# ============================================================
-# Từ điển âm tiết (giữ nguyên hành vi cũ)
-# ============================================================
-
-class SyllableDict:
-    _instance = None
-
-    @classmethod
-    def get_instance(cls):
-        if cls._instance is None:
-            cls._instance = SyllableDict()
-            cls._instance.load_once()
-        return cls._instance
-
-    def __init__(self):
-        self.words = set()
-
-    def load_once(self):
-        configured = os.environ.get("FCITX_TELEX_DICT")
-        here = os.path.dirname(__file__)
-        if configured:
-            candidates = [configured]
-            if not os.path.isabs(configured):
-                candidates.append(os.path.join(here, configured))
-        else:
-            candidates = [
-                os.path.join(here, "dict", "ietnamese.cm.dict"),
-                os.path.join(os.getcwd(), "dict", "vietnamese.cm.dict"),
-            ]
-        path = next((c for c in candidates if os.path.isfile(c)), candidates[0])
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                for line_number, line in enumerate(f):
-                    line = line.strip()
-                    if line_number == 0 and line.isdigit():
-                        continue          # dòng đếm của hunspell .dic
-                    slash = line.find('/')
-                    if slash != -1:
-                        line = line[:slash]
-                    if line:
-                        self.words.add(line.lower())
-        except OSError as exc:
-            logger.warning('Không thể tải từ điển từ %s: %s', path, exc)
-
-    def contains(self, word_low):
-        return bool(self.words) and word_low in self.words
-
-    def is_empty(self):
-        return not self.words
-
 
 # ============================================================
 # LỚP 1 — PHONOLOGY
@@ -563,6 +503,18 @@ class VietnameseEngine:
             return word
         return self.ph.place_tone(word, tone_idx)
 
+    def has_vietnamese_marks(self, word: str) -> bool:
+        return any(
+            ch.lower() == 'đ'
+            or (self.ph.info(ch) and (
+                self.ph.info(ch)[1] is not None or self.ph.info(ch)[2] > 0
+            ))
+            for ch in word
+        )
+
+    def is_valid_word(self, word: str) -> bool:
+        return self.ph.is_valid_rhyme_shape(word)
+
     def _apply_tone(self, word: str, tone_idx: int) -> str:
         if self.ph.word_tone(word) == tone_idx:
             # gõ trùng phím dấu -> tháo dấu
@@ -774,65 +726,3 @@ class VietnameseInputMedthod:
 
     def decompose(self, word: str) -> str:
         return self.engine.decompose(word)
-
-
-class VietnameseInputManager(QObject):
-    """Qt adapter that exposes the shared engine to the application."""
-
-    def __init__(self, app, schema: InputSchema | None = None):
-        super().__init__(app)
-        self.engine = VietnameseEngine(PHON, schema or DEFAULT_SCHEMA)
-        app.installEventFilter(self)
-
-    def eventFilter(self, watched, event):
-        if event.type() != QEvent.KeyPress:
-            return super().eventFilter(watched, event)
-        if event.modifiers() & BLOCKED_MODIFIERS:
-            return super().eventFilter(watched, event)
-
-        widget = QApplication.focusWidget()
-        if not isinstance(widget, (QLineEdit, QTextEdit, QPlainTextEdit)):
-            return super().eventFilter(watched, event)
-        if event.text() == '' or not event.text().isalpha():
-            return super().eventFilter(watched, event)
-
-        if isinstance(widget, QLineEdit):
-            if widget.hasSelectedText():
-                return super().eventFilter(watched, event)
-            text = widget.text()
-            cursor_pos = widget.cursorPosition()
-            start = cursor_pos
-            while start > 0 and text[start - 1].isalpha():
-                start -= 1
-            end = cursor_pos
-            while end < len(text) and text[end].isalpha():
-                end += 1
-            word = text[start:end]
-            replacement = self.engine.process_word(word, event.text())
-            widget.setSelection(start, end - start)
-            widget.insert(replacement)
-            return True
-
-        cursor = widget.textCursor()
-        if cursor.hasSelection():
-            return super().eventFilter(watched, event)
-        block = cursor.block()
-        block_text = block.text()
-        cursor_pos = cursor.positionInBlock()
-        start = cursor_pos
-        while start > 0 and block_text[start - 1].isalpha():
-            start -= 1
-        end = cursor_pos
-        while end < len(block_text) and block_text[end].isalpha():
-            end += 1
-        word = block_text[start:end]
-        replacement = self.engine.process_word(word, event.text())
-        replacement_cursor = QTextCursor(widget.document())
-        block_start = block.position()
-        replacement_cursor.setPosition(block_start + start)
-        replacement_cursor.setPosition(
-            block_start + end, QTextCursor.KeepAnchor
-        )
-        replacement_cursor.insertText(replacement)
-        widget.setTextCursor(replacement_cursor)
-        return True

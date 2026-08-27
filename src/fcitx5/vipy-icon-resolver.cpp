@@ -1,8 +1,8 @@
-#include "vicplex/vicplex-icon-resolver.hpp"
+#include "vipy/vipy-icon-resolver.hpp"
 
 #include <unistd.h>
 
-namespace vicplex::fcitx_wrapper {
+namespace vipy::fcitx_wrapper {
 
 namespace {
 bool isReadable(const std::string &path) {
@@ -38,4 +38,4 @@ std::string resolveIconPath(const std::vector<std::string> &names,
     return joinPath(paths.fallbackDirectory, names.front() + ".svg");
 }
 
-} // namespace vicplex::fcitx_wrapper
+} // namespace vipy::fcitx_wrapper

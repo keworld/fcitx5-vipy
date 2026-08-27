@@ -1,10 +1,10 @@
 //
 // Created by keworld on 8/26/26.
 //
-#include "vicplex/syllable_dict.hpp"
+#include "vipy/syllable_dict.hpp"
 #include "syllable_hash.hpp"
 
-namespace vicplex {
+namespace vipy {
 
     bool SyllableDict::contains(const std::string &low) {
         if (low.empty()) {
@@ -13,4 +13,4 @@ namespace vicplex {
         return Perfect_Hash::in_word_set(low.c_str(), static_cast<unsigned int>(low.length())) != nullptr;
     }
 
-} // namespace vicplex
+} // namespace vipy

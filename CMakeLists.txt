@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(fcitx5-vicplex VERSION 0.1.0 LANGUAGES CXX)
+project(fcitx5-vipy VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,7 +20,10 @@ include(GNUInstallDirs)
 find_package(Fcitx5Utils REQUIRED)
 find_package(Fcitx5Core REQUIRED)
 find_program(GPERF_EXECUTABLE gperf REQUIRED)
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Embed)
+
+install(FILES ${CMAKE_SOURCE_DIR}/scripts/vietnamese_input_method.py
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/fcitx5/vipy)
 
 # Load thư mục con
 add_subdirectory(src)

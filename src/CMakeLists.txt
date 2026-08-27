@@ -24,47 +24,40 @@ add_custom_command(
 # Đánh dấu cho IDE biết đây là file tự sinh
 set_source_files_properties(${GENERATED_HEADER} PROPERTIES GENERATED TRUE)
 
-# Thêm module thư viện vicplex bao gồm các file source trong src/core và src/fcitx5
-add_library(vicplex MODULE
+add_library(vipy MODULE
         # Headers (Khai báo để CLion nhận diện project target)
-        ${CMAKE_SOURCE_DIR}/include/vicplex/char_buffer.hpp
-        ${CMAKE_SOURCE_DIR}/include/vicplex/char_util.hpp
-        ${CMAKE_SOURCE_DIR}/include/vicplex/syllable_dict.hpp
-        ${CMAKE_SOURCE_DIR}/include/vicplex/telex_data.hpp
-        ${CMAKE_SOURCE_DIR}/include/vicplex/telex_transformer.hpp
-        ${CMAKE_SOURCE_DIR}/include/vicplex/utf8_helper.hpp
-        ${CMAKE_SOURCE_DIR}/include/vicplex/vni_data.hpp
-        ${CMAKE_SOURCE_DIR}/include/vicplex/vni_transformer.hpp
-        ${CMAKE_SOURCE_DIR}/include/vicplex/vicplex_config.hpp
+        ${CMAKE_SOURCE_DIR}/include/vipy/char_buffer.hpp
+        ${CMAKE_SOURCE_DIR}/include/vipy/char_util.hpp
+        ${CMAKE_SOURCE_DIR}/include/vipy/syllable_dict.hpp
+        ${CMAKE_SOURCE_DIR}/include/vipy/utf8_helper.hpp
+        ${CMAKE_SOURCE_DIR}/include/vipy/vipy_config.hpp
+        ${CMAKE_SOURCE_DIR}/include/vipy/vipy-icon-resolver.hpp
 
         # Sources
         core/syllable_dict.cpp
-        core/telex_data.cpp
-        core/telex_transformer.cpp
-        core/vni_data.cpp
-        core/vni_transformer.cpp
-        fcitx5/vicplex-icon-resolver.cpp
-        fcitx5/vicplex_addon.cpp
+        fcitx5/vipy-icon-resolver.cpp
+        fcitx5/vipy_addon.cpp
 
         # Generated header
         ${GENERATED_HEADER}
 )
 
 # Định nghĩa Include Directories
-target_include_directories(vicplex PRIVATE
-        ${CMAKE_SOURCE_DIR}/include          # Để bao hàm <vicplex/header.hpp>
+target_include_directories(vipy PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_CURRENT_BINARY_DIR}          # Để bao hàm file sinh tự động <syllable_hash.hpp>
 )
-target_compile_definitions(vicplex PRIVATE
-        FCITX_VICPLEX_ICON_DIR="${CMAKE_INSTALL_FULL_DATADIR}/icons/hicolor/scalable/apps"
+target_compile_definitions(vipy PRIVATE
+        FCITX_VIPY_ICON_DIR="${CMAKE_INSTALL_FULL_DATADIR}/icons/hicolor/scalable/apps"
+        VIPY_PYTHON_MODULE_DIR="${CMAKE_INSTALL_FULL_DATADIR}/fcitx5/vipy"
 )
 
 # Link thư viện Fcitx5
-target_link_libraries(vicplex PRIVATE Fcitx5::Core)
+target_link_libraries(vipy PRIVATE Fcitx5::Core Python3::Python)
 
-# Loại bỏ tiền tố 'lib' mặc định để sinh ra vicplex.so thay vì libvicplex.so
-set_target_properties(vicplex PROPERTIES PREFIX "")
+# Loại bỏ tiền tố 'lib' mặc định để sinh ra vipy.so thay vì libvipy.so
+set_target_properties(vipy PROPERTIES PREFIX "")
 
 # Cài đặt target module vào thư mục addon do Fcitx5 xác định.
 # Biến này cũng xử lý đúng prefix tùy chỉnh và cấu hình multiarch của distro.
-install(TARGETS vicplex DESTINATION ${FCITX_INSTALL_ADDONDIR})
+install(TARGETS vipy DESTINATION ${FCITX_INSTALL_ADDONDIR})
