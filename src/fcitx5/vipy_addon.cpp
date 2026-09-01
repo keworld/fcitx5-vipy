@@ -153,34 +153,58 @@ public:
     PythonEngine &operator=(const PythonEngine &) = delete;
 
     void setSchema(InputMethod method) {
+        currentMethod_ = method;
         PyGILState_STATE state = PyGILState_Ensure();
         Py_XDECREF(engine_);
         engine_ = nullptr;
-        const char *schemaName = method == InputMethod::Telex
-            ? "TelexSchema" : "VNISchema";
+        const char *schemaName = method == InputMethod::Telex ? "telex" : "vni";
         if (module_) {
-            PyObject *phon = PyObject_GetAttrString(module_, "PHON");
-            PyObject *schemaClass = PyObject_GetAttrString(module_, schemaName);
-            PyObject *schema = schemaClass ? PyObject_CallNoArgs(schemaClass) : nullptr;
             PyObject *engineClass = PyObject_GetAttrString(module_, "VietnameseEngine");
-            if (phon && schema && engineClass) {
-                engine_ = PyObject_CallFunctionObjArgs(engineClass, phon, schema, nullptr);
+            PyObject *schemaArg = PyUnicode_FromString(schemaName);
+            if (engineClass && schemaArg) {
+                engine_ = PyObject_CallFunctionObjArgs(engineClass, schemaArg, nullptr);
             }
-            if (!phon || !schemaClass || !schema || !engineClass || !engine_) {
+            if (!engineClass || !schemaArg || !engine_) {
                 logPythonError("creating Vietnamese engine");
             }
-            Py_XDECREF(phon);
-            Py_XDECREF(schemaClass);
-            Py_XDECREF(schema);
             Py_XDECREF(engineClass);
+            Py_XDECREF(schemaArg);
         } else {
             FCITX_ERROR() << "Cannot select schema: Python module is unavailable";
         }
         PyGILState_Release(state);
     }
 
-    std::string processWord(const std::string &word, char key) const {
-        return callString("process_word", word, std::string(1, key));
+    std::string processWord(const std::string &, char key) const {
+        return feedKey(std::string(1, key));
+    }
+
+    std::string feedKey(const std::string &key) const {
+        PyGILState_STATE state = PyGILState_Ensure();
+        std::string result;
+        if (engine_) {
+            PyObject *value = PyObject_CallMethod(engine_, "feed", "s", key.c_str());
+            if (!value) {
+                logPythonError("feed");
+            } else {
+                Py_DECREF(value);
+            }
+            result = getWord();
+        }
+        PyGILState_Release(state);
+        return result;
+    }
+
+    std::string getWord() const {
+        return callString("get_word");
+    }
+
+    std::string commitCurrent() {
+        return callString("commit");
+    }
+
+    void resetState() {
+        setSchema(currentMethod_);
     }
 
     bool isValidWord(const std::string &word) const {
@@ -192,12 +216,19 @@ public:
     }
 
 private:
-    std::string callString(const char *name, const std::string &word,
+    std::string callString(const char *name, const std::string &word = {},
                            const std::string &key = {}) const {
         PyGILState_STATE state = PyGILState_Ensure();
         std::string result;
         if (engine_) {
-            PyObject *value = PyObject_CallMethod(engine_, name, "ss", word.c_str(), key.c_str());
+            PyObject *value = nullptr;
+            if (word.empty() && key.empty()) {
+                value = PyObject_CallMethod(engine_, name, nullptr);
+            } else if (key.empty()) {
+                value = PyObject_CallMethod(engine_, name, "s", word.c_str());
+            } else {
+                value = PyObject_CallMethod(engine_, name, "ss", word.c_str(), key.c_str());
+            }
             if (value && PyUnicode_Check(value)) {
                 const char *text = PyUnicode_AsUTF8(value);
                 if (text) result = text;
@@ -227,6 +258,7 @@ private:
 
     PyObject *module_ = nullptr;
     PyObject *engine_ = nullptr;
+    InputMethod currentMethod_ = InputMethod::Telex;
     void *pythonHandle_ = nullptr;
 };
 
@@ -269,18 +301,18 @@ public:
         }
 
         const char key = static_cast<char>(sym);
-        const std::string next = engine_.processWord(current_, key);
-        if (next.empty()) {
+        current_ = engine_.feedKey(std::string(1, key));
+        if (current_.empty()) {
             commitAndReset();
             return;
         }
-        current_ = next;
         raw_.push_back(key);
         updatePreedit();
         event.filterAndAccept();
     }
 
     void reset() {
+        engine_.resetState();
         current_.clear();
         raw_.clear();
         updatePreedit();
@@ -288,14 +320,10 @@ public:
 
     void commitAndReset(const std::string &suffix = {}) {
         if (ic_ && !current_.empty()) {
-            const bool valid = engine_.hasMarks(current_) &&
-                               engine_.isValidWord(current_);
-            const std::string normalized = lowercaseVietnamese(current_);
-            const bool dictionaryMatch =
-                *config_.inputMethod == InputMethod::Vni ||
-                SyllableDict::contains(normalized);
-            const std::string &out = valid && dictionaryMatch ? current_ : raw_;
-            ic_->commitString(out + suffix);
+            const std::string committed = engine_.commitCurrent();
+            if (!committed.empty()) {
+                ic_->commitString(committed + suffix);
+            }
         }
         reset();
     }
@@ -320,10 +348,7 @@ private:
     void backspace(fcitx::KeyEvent &event) {
         if (raw_.empty()) return;
         raw_.pop_back();
-        current_.clear();
-        for (char key : raw_) {
-            current_ = engine_.processWord(current_, key);
-        }
+        current_ = engine_.feedKey("\b");
         updatePreedit();
         event.filterAndAccept();
     }
