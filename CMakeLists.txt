@@ -22,8 +22,11 @@ find_package(Fcitx5Core REQUIRED)
 find_program(GPERF_EXECUTABLE gperf REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Embed)
 
-install(FILES ${CMAKE_SOURCE_DIR}/scripts/vietnamese_input_method.py
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/fcitx5/vipy)
+file(GLOB VIPY_PYTHON_MODULES CONFIGURE_DEPENDS
+        "${CMAKE_SOURCE_DIR}/scripts/*.py")
+
+install(FILES ${VIPY_PYTHON_MODULES}
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/fcitx5/vipy/scripts)
 
 # Load thư mục con
 add_subdirectory(src)

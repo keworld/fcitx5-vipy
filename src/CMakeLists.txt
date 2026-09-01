@@ -47,7 +47,7 @@ target_include_directories(vipy PRIVATE
 )
 target_compile_definitions(vipy PRIVATE
         FCITX_VIPY_ICON_DIR="${CMAKE_INSTALL_FULL_DATADIR}/icons/hicolor/scalable/apps"
-        VIPY_PYTHON_MODULE_DIR="${CMAKE_INSTALL_FULL_DATADIR}/fcitx5/vipy"
+        VIPY_PYTHON_MODULE_DIR="${CMAKE_INSTALL_FULL_DATADIR}/fcitx5/vipy/scripts"
 )
 
 # Link thư viện Fcitx5

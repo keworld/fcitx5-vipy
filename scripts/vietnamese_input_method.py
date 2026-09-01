@@ -1,8 +1,10 @@
 
-from input_method.vietnamese_phonology import VietnamesePhonology
-from input_method.input_schema import (
-    TelexSchema, VNISchema, Action
-)
+try:
+    from .vietnamese_phonology import VietnamesePhonology
+    from .input_schema import (TelexSchema, VNISchema, Action)
+except ModuleNotFoundError:  # Installed under /usr/share/fcitx5/vipy as flat modules
+    from vietnamese_phonology import VietnamesePhonology
+    from input_schema import (TelexSchema, VNISchema, Action)
 
 
 class VietnameseEngine:

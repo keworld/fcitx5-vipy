@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from input_method.vietnamese_phonology import VietnamesePhonology
+
+try:
+    from .vietnamese_phonology import VietnamesePhonology
+except ModuleNotFoundError:  # Installed as flat modules in the addon data dir
+    from vietnamese_phonology import VietnamesePhonology
 
 @dataclass(frozen=True)
 class Action:
