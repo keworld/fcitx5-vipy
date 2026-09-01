@@ -77,10 +77,10 @@ True nếu `string` có thể là **tiền tố của một từ hợp lệ** (d
 
 ```python
 strip_tone(string) -> str        # bỏ chỉ dấu thanh, giữ dấu phụ và đ
-strip_mark(string) -> str        # bỏ chỉ dấu phụ, giữ dấu thanh
+strip_mark(string, mark) -> str        # bỏ chỉ dấu phụ, giữ dấu thanh
 bare(string) -> str              # bỏ tất cả dấu + đ→d, lowercase
 word_tone(string) -> int         # trả index thanh 1–5, 0 nếu không có
-word_mark(string) -> int         # trả index mark 1–4, 0 nếu không có
+word_mark(string) -> list[int]         # trả danh sách index mark 1–4, rỗng nếu không có 
 vowel_components(string) -> List[str]  # vd 'qủa' -> ['u','a']
 ```
 
@@ -145,7 +145,7 @@ True nếu kết quả đặt đồng thời là vần hợp lệ. Vd: `('uo',[3
 - **Vowel double:** `ai ao au ay âu ây eo ia iê iu oa oă oe oi ôi ơi ua uâ uơ uô ui uy ưa ươ ưi ưu uê yê êu`
 - **Vowel triple:** `iêu oai oao oay oeo uai uay uây uôi uyu uyê ươu yêu`
 
-## 6. Ghi chú tích hợp (quan trọng cho AI khi dùng module này)
+## 6. Ghi chú tích hợp
 
 1. **Chuẩn hóa Unicode:** mọi kết quả trả về ở dạng **NFC**; đầu vào nên chuẩn hóa NFC trước khi gọi.
 2. **Vị trí dấu thanh** được tính theo nguyên tắc: quét onset (3→2→1 ký tự) rồi final (2→1 ký tự) trên dạng **bare**; vì NFC mỗi ký tự có dấu = 1 codepoint nên index giữa bare và signed khớp nhau.
