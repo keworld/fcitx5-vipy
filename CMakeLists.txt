@@ -22,11 +22,19 @@ find_package(Fcitx5Core REQUIRED)
 find_program(GPERF_EXECUTABLE gperf REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Embed)
 
+if(NOT DEFINED ENV{HOME} OR "$ENV{HOME}" STREQUAL "")
+    message(FATAL_ERROR "The HOME environment variable is required to install Vipy Python modules")
+endif()
+
+set(VIPY_PYTHON_MODULE_DIR
+        "$ENV{HOME}/.config/fcitx5-vipy/script"
+        CACHE PATH "User directory for Vipy Python modules")
+
 file(GLOB VIPY_PYTHON_MODULES CONFIGURE_DEPENDS
         "${CMAKE_SOURCE_DIR}/scripts/*.py")
 
 install(FILES ${VIPY_PYTHON_MODULES}
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/fcitx5/vipy/scripts)
+        DESTINATION ${VIPY_PYTHON_MODULE_DIR})
 
 # Load thư mục con
 add_subdirectory(src)
