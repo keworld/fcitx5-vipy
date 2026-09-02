@@ -12,7 +12,6 @@ Bộ gõ tiếng Việt dành cho Fcitx5 trên Linux.
 - C++20 compiler (GCC / Clang)
 - Python 3 development headers/runtime (used by the Fcitx5 wrapper)
 - CMake (>= 3.10)
-- gperf (dùng để sinh bảng tra cứu tối ưu tại thời điểm build)
 
 ## 👁️‍🗨️ Demo
 ![Demo](./assets/demo.GIF)
@@ -22,11 +21,11 @@ Bộ gõ tiếng Việt dành cho Fcitx5 trên Linux.
    
 **Arch Linux:**
 ```bash
-sudo pacman -S fcitx5 gperf cmake gcc
+sudo pacman -S fcitx5 cmake gcc
 ```
 **Ubuntu/Debian:**
 ```bash
-sudo apt install libfcitx5utils-dev gperf cmake g++
+sudo apt install libfcitx5utils-dev cmake g++
 ```
 2. Clone repository:
 ```bash

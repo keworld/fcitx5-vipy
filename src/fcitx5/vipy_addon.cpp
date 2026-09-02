@@ -17,7 +17,6 @@
 #include <fcitx-config/iniparser.h>
 #include <fcitx-utils/log.h>
 
-#include "vipy/syllable_dict.hpp"
 #include "vipy/utf8_helper.hpp"
 #include "vipy/vipy-icon-resolver.hpp"
 #include "vipy/vipy_config.hpp"
@@ -175,10 +174,6 @@ public:
         PyGILState_Release(state);
     }
 
-    std::string processWord(const std::string &, char key) const {
-        return feedKey(std::string(1, key));
-    }
-
     std::string feedKey(const std::string &key) const {
         PyGILState_STATE state = PyGILState_Ensure();
         std::string result;
@@ -207,14 +202,6 @@ public:
         setSchema(currentMethod_);
     }
 
-    bool isValidWord(const std::string &word) const {
-        return callBool("is_valid_word", word);
-    }
-
-    bool hasMarks(const std::string &word) const {
-        return callBool("has_vietnamese_marks", word);
-    }
-
 private:
     std::string callString(const char *name, const std::string &word = {},
                            const std::string &key = {}) const {
@@ -237,19 +224,6 @@ private:
             } else {
                 FCITX_ERROR() << name << " returned a non-string value";
             }
-            Py_XDECREF(value);
-        }
-        PyGILState_Release(state);
-        return result;
-    }
-
-    bool callBool(const char *name, const std::string &word) const {
-        PyGILState_STATE state = PyGILState_Ensure();
-        bool result = false;
-        if (engine_) {
-            PyObject *value = PyObject_CallMethod(engine_, name, "s", word.c_str());
-            if (value) result = PyObject_IsTrue(value) != 0;
-            else logPythonError(name);
             Py_XDECREF(value);
         }
         PyGILState_Release(state);
@@ -337,11 +311,23 @@ private:
             ic_->updatePreedit();
             return;
         }
+
+        const bool useUnderline = !ic_->capabilityFlags() ||
+                                  !ic_->capabilityFlags().test(fcitx::CapabilityFlag::ClientSideInputPanel) ||
+                                  ic_->capabilityFlags().test(fcitx::CapabilityFlag::FormattedPreedit);
+
         fcitx::Text text(current_, fcitx::TextFormatFlags{
             fcitx::TextFormatFlag::Underline,
             fcitx::TextFormatFlag::DontCommit});
         text.setCursor(static_cast<int>(current_.size()));
-        panel.setClientPreedit(text);
+
+        if (useUnderline) {
+            panel.setPreedit(fcitx::Text{});
+            panel.setClientPreedit(text);
+        } else {
+            panel.setClientPreedit(fcitx::Text{});
+            panel.setPreedit(text);
+        }
         ic_->updatePreedit();
     }
 

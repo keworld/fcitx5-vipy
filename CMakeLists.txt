@@ -19,7 +19,6 @@ include(GNUInstallDirs)
 # Tìm kiếm các phụ thuộc bắt buộc
 find_package(Fcitx5Utils REQUIRED)
 find_package(Fcitx5Core REQUIRED)
-find_program(GPERF_EXECUTABLE gperf REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Embed)
 
 if(NOT DEFINED ENV{HOME} OR "$ENV{HOME}" STREQUAL "")
