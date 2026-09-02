@@ -306,38 +306,34 @@ private:
     void updatePreedit() {
         if (!ic_) return;
 
-        auto &panel = ic_->inputPanel();
+        auto &inputPanel = ic_->inputPanel();
+        inputPanel.reset();
 
-        // Không có nội dung preedit -> xóa sạch và return sớm
         if (current_.empty()) {
-            panel.reset();
             ic_->updatePreedit();
+            ic_->updateUserInterface(fcitx::UserInterfaceComponent::InputPanel);
             return;
         }
 
-        // App có hỗ trợ tự vẽ preedit trong editor không?
-        // (VD: GTK/Qt thường có, PyCharm/Java thì không)
         const bool useClientPreedit =
             ic_->capabilityFlags().test(fcitx::CapabilityFlag::Preedit);
 
-        // Preedit có format: gạch chân, không commit nguyên văn
-        fcitx::Text text(current_, fcitx::TextFormatFlags{
-            fcitx::TextFormatFlag::Underline,
-            fcitx::TextFormatFlag::DontCommit});
+        fcitx::TextFormatFlags formatFlags{fcitx::TextFormatFlag::Underline};
+        fcitx::Text text(current_, formatFlags);
         text.setCursor(static_cast<int>(current_.size()));
 
         if (useClientPreedit) {
-            // App tự vẽ preedit -> xóa preedit phía server
-            panel.setPreedit(fcitx::Text{});
-            panel.setClientPreedit(text);
+            inputPanel.setPreedit(fcitx::Text{});
+            inputPanel.setClientPreedit(text);
         } else {
-            // App không hỗ trợ (VD: PyCharm)
-            // -> fcitx tự vẽ khung preedit nổi
-            panel.setClientPreedit(fcitx::Text{});
-            panel.setPreedit(text);
+            // PyCharm, Java apps... -> fcitx tự vẽ khung preedit nổi
+            inputPanel.setClientPreedit(fcitx::Text{});
+            inputPanel.setPreedit(text);
         }
 
         ic_->updatePreedit();
+        // BẮT BUỘC: báo cho classic UI vẽ lại input panel (khung preedit nổi)
+        ic_->updateUserInterface(fcitx::UserInterfaceComponent::InputPanel);
     }
 
     void backspace(fcitx::KeyEvent &event) {
