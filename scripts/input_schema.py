@@ -1,12 +1,11 @@
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-
 from vietnamese_phonology import VietnamesePhonology
 
 @dataclass(frozen=True)
 class Action:
     value: int # mark= 1...4 | tone = 1...5
-    type: str = "none" # none | mark | tone | toggle_mark | toggle_tone
+    type: str = "none" # none | mark | tone | toggle_mark | toggle_tone | lone_w
 
 class InputSchema(ABC):
     PHON = VietnamesePhonology()
@@ -118,11 +117,28 @@ class TelexSchema(InputSchema):
         'uw': 3,
         'dd': 4,
     }
+    LONE_W_ENABLED = True
 
     @classmethod
-    def name(cls):
+    def name(cls) -> str:
         return 'telex'
 
+    @classmethod
+    def toggle_lone_w(cls) -> None:
+        cls.LONE_W_ENABLED = not cls.LONE_W_ENABLED # toggle hai chiều
+
+    @classmethod
+    def match(cls, base_string: str, key: str) -> Action:
+        # 1. Thử mark/tone bình thường trước (uw, ow, aw, dd, tone ..)
+        action = super().match(base_string, key)
+        if action.type != 'none':
+            return action
+
+        # 2. Không match được gif -> nếu key là 'w' và lone_w bật -> chèn ư
+        if cls.LONE_W_ENABLED and key.lower() == 'w':
+            return Action(value= 1 if key.isupper() else -1, type= 'lone_w')
+
+        return action
 
 class VNISchema(InputSchema):
     TONE_KEYS = {'1': 1, '2': 2, '3': 3, '4': 4, '5': 5}
@@ -138,5 +154,5 @@ class VNISchema(InputSchema):
     }
 
     @classmethod
-    def name(cls):
+    def name(cls) -> str:
         return 'vni'

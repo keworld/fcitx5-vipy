@@ -1,7 +1,7 @@
 from dataclasses import dataclass
-
+from functools import lru_cache
 import unicodedata as ud
-from typing import List, Tuple
+from typing import List
 
 
 @dataclass(frozen=True)
@@ -95,12 +95,48 @@ class VietnamesePhonology:
         ),
     }
 
+    # --- Precomputed lookup (tính 1 lần khi import, KHÔNG đổi logic) ---
+    _ALL_VOWELS = (
+        VOWELS['single'] + VOWELS['double'] + VOWELS['triple']
+    )
+    _VOWEL_SET = frozenset(_ALL_VOWELS)
+    # bare(vowel) -> vowel gốc. Dùng cú pháp lambda vì bare là method
+    _BARE_TO_VOWEL = {
+        ''.join(ch for ch in __import__('unicodedata').normalize('NFD', v)
+                if not __import__('unicodedata').combining(ch)
+                and ch not in 'đĐ') or v: v
+        for v in _ALL_VOWELS
+    }
+    _BARE_VOWEL_SET = set(_BARE_TO_VOWEL.keys())
+
+    # --- Precomputed onset prefixes ---
+    _ALL_ONSETS = (
+            CONSONATS['single']['initial']
+            + CONSONATS['double']['initial']
+            + CONSONATS['triple']['initial']
+    )
+    _ALL_FINALS = (
+            CONSONATS['single']['final']
+            + CONSONATS['double']['final']
+    )
+    # mọi prefix của mọi onset (kể cả full)
+    _ONSET_PREFIXES = frozenset(
+        _o[:_i] for _o in _ALL_ONSETS for _i in range(1, len(_o) + 1)
+    )
+    _FINAL_PREFIXES = frozenset(
+        _f[:_i] for _f in _ALL_FINALS for _i in range(1, len(_f) + 1)
+    )
+    _ONSET_PREFIXES = _ONSET_PREFIXES
+    _FINAL_PREFIXES = _FINAL_PREFIXES
+
     # =========================================================
     # helpers
     # =========================================================
     @staticmethod
     def _strip_combining(string: str) -> str:
         """Tách bỏ mọi dấu combining (thanh + phụ), trả về ký tự gốc."""
+        if string.isascii():  # fast-path: 'dung', 'DUNG'...
+            return string  # ASCII không thể chứa combining mark
         return ''.join(
             ch for ch in ud.normalize('NFD', string)
             if not ud.combining(ch)
@@ -114,50 +150,39 @@ class VietnamesePhonology:
 
     def _is_final(self, s: str) -> bool:
         c = self.CONSONATS
-        return (s in c['single']['final'] or s in c['double']['final'])
+        return s in c['single']['final'] or s in c['double']['final']
 
     # =========================================================
     # PRIVATE FUNCTION
     # =========================================================
-    def _valid_tone_index(self, string: str, tone) -> int:
+    def _valid_tone_index(self, string: str) -> int:
         """Vị trí đặt dấu thanh.
         - qu/gi đầu từ: nguyên âm của chúng tính như phụ âm
         - cụm 'ươ'/'uơ': dấu vào 'ơ'; cụm 'ưa': dấu vào 'ư'
         - nguyên âm đã có dấu phụ (ă â ê ô ơ ư): dấu thanh trên chữ đó
         - vần đóng: dấu vào nguyên âm cuối
         - vần mở: dấu vào nguyên âm áp chót (oa/oe/uy -> âm đầu)"""
-        signed = ud.normalize('NFC', string.lower())
-        bare = self.bare(signed)
+        signed, bare, onset, rest, final = self._split_syllable(string.lower())
 
-        # tách onset (trên bare — phụ âm luôn không dấu)
-        onset = ''
-        for size in (3, 2, 1):
-            if bare[:size] and self._is_onset(bare[:size]):
-                onset = bare[:size]
-                break
-        rest = bare[len(onset):]
-
-        # tách final
-        final = ''
-        for size in (2, 1):
-            if rest[-size:] and self._is_final(rest[-size:]):
-                final = rest[-size:]
-                break
         vowel_b = rest[:len(rest) - len(final)]
         if not vowel_b:
+            # 'gi' một mình ('gì', 'gí', 'gị'...): 'i' vẫn là nguyên âm,
+            # dấu thanh đặt trên 'i' — index 1 trong chuỗi 'gi'
+            if onset == 'gi':
+                return 1
             return -1
+
         # cụm nguyên âm dạng CÓ DẤU (NFC: 1 ký tự = 1 index)
         vowel_s = signed[len(onset):len(onset) + len(vowel_b)]
-
         base = len(onset)
 
         # qu/gi: bỏ nguyên âm đầu của chúng
         if onset.endswith('q') and vowel_b.startswith('u'):
             return base + 1
         if onset == 'gi' and vowel_b.startswith('i') and len(vowel_b) > 1:
-            return base + 1
+            return 1
 
-        # cụm ươ, uơ -> 'ơ'; cụm ưa -> 'ư'  (cả hai chữ có dấu phụ)
+        # cụm ươ, uơ -> 'ơ'; cụm ưa -> 'ư'
         if vowel_s.startswith('ươ') or vowel_s.startswith('uơ'):
             return base + 1
         if vowel_s.startswith('ưa'):
@@ -168,18 +193,16 @@ class VietnamesePhonology:
             if ch in self.DIACRITICS:
                 return base + i
 
-        if final:                                   # vần đóng: nguyên âm cuối
+        if final:  # vần đóng: nguyên âm cuối
             pos = len(vowel_b) - 1
-        else:                                       # vần mở: áp chót
+        else:  # vần mở: áp chót
             pos = max(len(vowel_b) - 2, 0)
             if vowel_b in ('oa', 'oe', 'uy'):
                 pos = 0
         return base + pos
 
-
-    def _vowel_of(self, string: str) -> str:
-        """Tách cụm nguyên âm ở dạng CÓ DẤU.
-        Dùng bare chỉ để xác định vị trí onset/final (phụ âm luôn không dấu)."""
+    def _split_syllable(self, string: str):
+        """Chuẩn hóa và tách âm tiết thành signed, bare, onset, rest, final."""
         signed = ud.normalize('NFC', string)
         bare = self.bare(signed)
 
@@ -188,21 +211,29 @@ class VietnamesePhonology:
             if bare[:size] and self._is_onset(bare[:size]):
                 onset = bare[:size]
                 break
-        rest_bare = bare[len(onset):]
+        rest = bare[len(onset):]
 
         final = ''
         for size in (2, 1):
-            tail = rest_bare[-size:]
+            tail = rest[-size:]
             if tail and self._is_final(tail):
                 final = tail
                 break
+
+        return signed, bare, onset, rest, final
+
+    def _vowel_of(self, string: str) -> str:
+        """Tách cụm nguyên âm ở dạng CÓ DẤU.
+        Dùng bare chỉ để xác định vị trí onset/final (phụ âm luôn không dấu)."""
+        signed, bare, onset, rest, final = self._split_syllable(string)
 
         # cắt trên chuỗi CÓ DẤU bằng chỉ số lấy từ bare
         # (NFC: mỗi ký tự có dấu = 1 codepoint, nên độ dài khớp)
         end = len(bare) - len(final)
         return signed[len(onset):end]
 
-    def _restore_case(self, original: str, lowered_result: str) -> str:
+    @staticmethod
+    def _restore_case(original: str, lowered_result: str) -> str:
         """Phục hồi hoa/thường theo vị trí: chữ nào ở gốc là HOA
         thì lấy ký tự KẾT QUẢ ở vị trí đó và viết hoa."""
         out = []
@@ -225,40 +256,35 @@ class VietnamesePhonology:
         Không dấu: so bare để 'uo' khớp 'uô'/'ươ' khi đang gõ."""
         if not string:
             return False
-        v = self.VOWELS
-        all_v = v['single'] + v['double'] + v['triple']
-        signed = ud.normalize('NFC', string.lower())
+        lowered = string.lower()
+        signed = lowered if ud.is_normalized('NFC', lowered) else ud.normalize('NFC', lowered)
+
         stripped = self.strip_tone(signed)
         if any(ch in self.DIACRITICS for ch in stripped):
-            return stripped in all_v
+            return stripped in self._VOWEL_SET
         s = self.bare(signed)
         if not s:
             return False
-        return any(self.bare(vv) == s for vv in all_v)
+        return s in self._BARE_VOWEL_SET
 
     def is_onset_prefix(self, string: str) -> bool:
         """prefix hợp lệ của phụ âm đầu (kể cả prefix chưa hoàn chỉnh)."""
-        c = self.CONSONATS
-        onsets = c['single']['initial'] + c['double']['initial'] + c['triple']['initial']
-        return any(o.startswith(string) for o in onsets if string)
+        return bool(string) and string in self._ONSET_PREFIXES
 
     def is_nucleus_prefix(self, string: str) -> bool:
         s = self.bare(string)
         if not s:
             return False
-        v = self.VOWELS
-        all_v = v['single'] + v['double'] + v['triple']
-        return any(self.bare(vv).startswith(s) for vv in all_v)
+        return any(self.bare(vv).startswith(s) for vv in self._ALL_VOWELS)
 
     def is_rhyme_prefix(self, string: str) -> bool:
         s = self.bare(string)
-        finals = self.CONSONATS['single']['final'] + self.CONSONATS['double']['final']
         if self.is_nucleus_prefix(s):
             return True
         for i in range(1, len(s)):
             vowel_part, final_part = s[:i], s[i:]
             vowel_ok = self.is_vowel(vowel_part) or self.is_nucleus_prefix(vowel_part)
-            final_ok = any(f.startswith(final_part) for f in finals)
+            final_ok = final_part in self._FINAL_PREFIXES
             if vowel_ok and final_ok:
                 return True
         return False
@@ -290,9 +316,8 @@ class VietnamesePhonology:
         if not vowel_b:
             return False
         vowel_s = no_tone[len(onset):len(onset) + len(vowel_b)]
-        all_v = (self.VOWELS['single'] + self.VOWELS['double']
-                 + self.VOWELS['triple'])
-        if vowel_s not in all_v:
+
+        if vowel_s not in self._VOWEL_SET:
             return False
         if vowel_s in self.VOWELS['triple'] and final:
             return False
@@ -321,16 +346,18 @@ class VietnamesePhonology:
         return self.is_rhyme_prefix(rest)
 
     def strip_tone(self, string: str) -> str:
-        out = []
-        for ch in ud.normalize('NFD', string):
-            if ud.combining(ch) and ch in [t.combining for t in self.TONES.values()]:
-                continue
-            out.append(ch)
+        tone_chars = {t.combining for t in self.TONES.values()}  # hoặc gán ở __init__/class-level
+        nfd = ud.normalize('NFD', string)
+        if not any(ch in tone_chars for ch in nfd):
+            return ud.normalize('NFC', nfd)  # không có tone → chỉ cần NFC lại
+        out = [ch for ch in nfd if ch not in tone_chars]
         return ud.normalize('NFC', ''.join(out))
 
-    def strip_mark(self, string: str, mark_idx: int) -> str:
+    @staticmethod
+    def strip_mark(string: str, mark_idx: int) -> str:
         """
         Bỏ một dấu phụ (mark) cụ thể, giữ nguyên dấu thanh và các dấu phụ khác.
+        :param string: chuỗi ký tự nền
         :param mark_idx: 1 (breve), 2 (circumflex), 3 (horn), 4 (stroke)
         """
         # Xử lý riêng mark 4 (stroke) vì 'đ'/'Đ' không phân tách trong chuẩn NFD
@@ -365,7 +392,12 @@ class VietnamesePhonology:
         return self._strip_combining(string.lower())  # không replace đ
 
     def bare(self, string: str) -> str:
-        result = self._strip_combining(string)
+        return self._bare_cached(string)
+
+    @staticmethod
+    @lru_cache(maxsize=4096)
+    def _bare_cached(string: str) -> str:
+        result = VietnamesePhonology._strip_combining(string)
         return result.replace('đ', 'd').replace('Đ', 'D')
 
     def reconstruction(self, string: str) -> str:
@@ -436,7 +468,7 @@ class VietnamesePhonology:
 
         tone_obj = self.TONES[tone]
         no_tone = ud.normalize('NFC', self.strip_tone(string))
-        idx = self._valid_tone_index(no_tone, tone_obj)
+        idx = self._valid_tone_index(no_tone)
 
         if idx < 0:
             return string
@@ -543,9 +575,8 @@ class VietnamesePhonology:
 
         # Mark nguyên âm: kết quả phải có vấn hợp lệ
         vowel = self._vowel_of(out)          # vd: 'uă', 'ưa', 'â'
-        all_v = (self.VOWELS['single'] + self.VOWELS['double']
-                 + self.VOWELS['triple'])
-        return vowel in all_v                # so TRỰC TIẾP, không bare
+
+        return vowel in self._VOWEL_SET                # so TRỰC TIẾP, không bare
 
     # =========================================================
     # MULTI-MARK API
