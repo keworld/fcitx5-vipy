@@ -28,24 +28,17 @@ except ImportError:
     from syllable_dict import SyllableDict
 
 # ---------------------------------------------------------------------------
-# KeySym constants (X11/FcitxKeySym)
+# Special key tokens passed by the Fcitx wrapper.
 # ---------------------------------------------------------------------------
-KEY_BACKSPACE = 0xFF08
-KEY_RETURN    = 0xFF0D
-KEY_ESCAPE    = 0xFF1B
-KEY_TAB       = 0xFF09
-KEY_SPACE     = 0x0020
+KEY_BACKSPACE = "BackSpace"
+KEY_RETURN    = "Return"
+KEY_ESCAPE    = "Escape"
+KEY_TAB       = "Tab"
+KEY_SPACE     = "Space"
 
 NAVIGATION_KEYS = frozenset({
-    0xFF51,  # Left
-    0xFF52,  # Up
-    0xFF53,  # Right
-    0xFF54,  # Down
-    0xFF50,  # Home
-    0xFF57,  # End
-    0xFF55,  # Prior (PageUp)
-    0xFF56,  # Next (PageDown)
-    0xFFFF,  # Delete
+    "Left", "Up", "Right", "Down", "Home", "End",
+    "PageUp", "PageDown", "Delete",
 })
 
 # Modifier bit — phải khớp fcitx5 KeyState (C++ phía wrapper tự map).
@@ -56,20 +49,6 @@ MOD_ALT   = 1 << 2
 HOTKEY_MASK = MOD_CTRL | MOD_ALT
 
 logger = logging.getLogger(__name__)
-
-
-def _keysym_to_char(keysym: int, mods: int) -> str:
-    """Dịch keysym chữ/số thành ký tự, tôn trọng Shift."""
-    if keysym == KEY_SPACE:
-        return " "
-    if 0x61 <= keysym <= 0x7A or 0x41 <= keysym <= 0x5A:  # a-z/A-Z
-        ch = chr(keysym)
-        if mods & MOD_SHIFT:
-            return ch.upper()
-        return ch
-    if 0x30 <= keysym <= 0x39:                       # 0-9
-        return chr(keysym)
-    return ""
 
 
 class VietnameseEngine:
@@ -127,7 +106,7 @@ class VietnameseEngine:
             return self._result(consumed=consumed, commit=buf)
         return self._result(consumed=consumed)
 
-    def process_key(self, keysym: int, mods: int, is_release: bool) -> dict:
+    def process_key(self, key: str, mods: int = 0, is_release: bool = False) -> dict:
         if is_release:
             return self._result(consumed=False)
 
@@ -136,13 +115,13 @@ class VietnameseEngine:
             return self._flush()
 
         # Phím điều hướng: flush buffer, KHÔNG nuốt phím.
-        if keysym in NAVIGATION_KEYS:
+        if key in NAVIGATION_KEYS:
             return self._flush()
 
-        if keysym == KEY_TAB:
+        if key == KEY_TAB:
             return self._flush()
 
-        if keysym == KEY_ESCAPE:
+        if key == KEY_ESCAPE:
             # Hủy preedit (Unikey behavior).
             if self._preedit:
                 self.reset()
@@ -151,10 +130,10 @@ class VietnameseEngine:
 
         # Các keysym này kết thúc/ngắt từ và không bao giờ được đưa vào
         # pipeline Telex/VNI. Khi không có preedit, trả phím cho ứng dụng.
-        if keysym in (KEY_RETURN, KEY_SPACE):
+        if key in (KEY_RETURN, KEY_SPACE):
             return self._flush()
 
-        if keysym == KEY_BACKSPACE:
+        if key == KEY_BACKSPACE:
             if self._preedit:
                 self._raw_text = self._raw_text[:-1]
                 if self._literal:
@@ -168,8 +147,7 @@ class VietnameseEngine:
                 return self._result(consumed=True)
             return self._result(consumed=False)   # để app tự xóa
 
-        ch = _keysym_to_char(keysym, mods)
-        if not ch:
+        if not isinstance(key, str) or len(key) != 1 or not key.isalnum():
             # Phím lạ (punctuation, F1...): flush buffer, thả phím qua.
             return self._flush()
 

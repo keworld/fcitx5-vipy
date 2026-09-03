@@ -11,20 +11,21 @@ except ImportError:
 # Map Qt.Key -> FcitxKeySym (X11 keysym)
 # ---------------------------------------------------------------------------
 _QT_TO_KEYSYM = {
-    Qt.Key_Backspace: 0xFF08,
-    Qt.Key_Return:    0xFF0D,
-    Qt.Key_Enter:     0xFF0D,
-    Qt.Key_Escape:    0xFF1B,
- Qt.Key_Tab:       0xFF09,
-    Qt.Key_Left:      0xFF51,
-    Qt.Key_Up:        0xFF52,
-    Qt.Key_Right:     0xFF53,
-    Qt.Key_Down:      0xFF54,
-    Qt.Key_Home:      0xFF50,
-    Qt.Key_End:       0xFF57,
-    Qt.Key_PageUp:    0xFF55,
-    Qt.Key_PageDown:  0xFF56,
-    Qt.Key_Delete:    0xFFFF,
+    Qt.Key_Backspace: "BackSpace",
+    Qt.Key_Return:    "Return",
+    Qt.Key_Enter:     "Return",
+    Qt.Key_Escape:    "Escape",
+    Qt.Key_Tab:       "Tab",
+    Qt.Key_Left:      "Left",
+    Qt.Key_Up:        "Up",
+    Qt.Key_Right:     "Right",
+    Qt.Key_Down:      "Down",
+    Qt.Key_Home:      "Home",
+    Qt.Key_End:       "End",
+    Qt.Key_PageUp:    "PageUp",
+    Qt.Key_PageDown:  "PageDown",
+    Qt.Key_Delete:    "Delete",
+    Qt.Key_Space:     "Space",
 }
 
 MOD_SHIFT = 1 << 0
@@ -56,15 +57,18 @@ def _qt_event_to_keys(event) -> tuple:
             mods |= bit
 
     if Qt.Key_Space <= qt_key <= Qt.Key_ydiaeresis:
-        keysym = qt_key
+        keysym = chr(qt_key)
     elif qt_key in _QT_TO_KEYSYM:
         keysym = _QT_TO_KEYSYM[qt_key]
     else:
         return 0, mods
 
     # Chuẩn hóa keysym chữ hoa về chữ thường (quy ước X11/fcitx5).
-    if 0x41 <= keysym <= 0x5A:            # 'A'-'Z'
-        keysym += 0x20
+    if isinstance(keysym, str) and len(keysym) == 1 and keysym.isalpha():
+        if mods & MOD_SHIFT:
+            keysym = keysym.upper()
+        else:
+            keysym = keysym.lower()
 
     return keysym, mods
 

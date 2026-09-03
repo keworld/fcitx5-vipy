@@ -52,9 +52,10 @@ VietnameseInputMethodEngine::VietnameseInputMethodEngine(fcitx::Instance *instan
               saveConfig();
               updateActions();
           }) {
+    reloadConfig();
     registerProperties();
     setupActions();
-    reloadConfig();
+    updateActions();
 }
 
 void VietnameseInputMethodEngine::registerProperties() {
@@ -101,7 +102,6 @@ void VietnameseInputMethodEngine::reloadConfig() {
     readAsIni(config_, fcitx::StandardPathsType::Config, "addon/vipy.conf");
     engine_.setSchema(*config_.inputMethod);
     syncPythonConfig();
-    updateActions();
 }
 
 void VietnameseInputMethodEngine::syncPythonConfig() {

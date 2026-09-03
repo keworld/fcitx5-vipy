@@ -45,14 +45,14 @@ void PythonEngine::setSchema(vipy::InputMethod method) {
 }
 
 PythonEngine::ProcessResult PythonEngine::processKey(
-    int keysym, int modifiers, bool isRelease) const {
+    const std::string &key, int modifiers, bool isRelease) const {
     ProcessResult result;
     GilGuard gil;
     if (!engine_) {
         return result;
     }
     PyObjectPtr<> value(PyObject_CallMethod(
-        engine_.get(), "process_key", "iii", keysym, modifiers,
+        engine_.get(), "process_key", "sii", key.c_str(), modifiers,
         isRelease ? 1 : 0));
     if (!value) {
         logPythonError("process_key");

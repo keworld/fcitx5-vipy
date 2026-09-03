@@ -7,6 +7,34 @@
 #include <fcitx/userinterfacemanager.h>
 
 namespace vipy::fcitx_wrapper {
+namespace {
+
+std::string keyToken(fcitx::KeySym sym) {
+    switch (sym) {
+    case FcitxKey_BackSpace: return "BackSpace";
+    case FcitxKey_Return: return "Return";
+    case FcitxKey_Escape: return "Escape";
+    case FcitxKey_Tab: return "Tab";
+    case FcitxKey_space: return "Space";
+    case FcitxKey_Left: return "Left";
+    case FcitxKey_Up: return "Up";
+    case FcitxKey_Right: return "Right";
+    case FcitxKey_Down: return "Down";
+    case FcitxKey_Home: return "Home";
+    case FcitxKey_End: return "End";
+    case FcitxKey_Prior: return "PageUp";
+    case FcitxKey_Next: return "PageDown";
+    case FcitxKey_Delete: return "Delete";
+    default:
+        if ((sym >= 'a' && sym <= 'z') || (sym >= 'A' && sym <= 'Z') ||
+            (sym >= '0' && sym <= '9')) {
+            return std::string(1, static_cast<char>(sym));
+        }
+        return {};
+    }
+}
+
+} // namespace
 
 VipyState::VipyState(python::PythonEngine *engine, VipyConfig *config,
                      fcitx::InputContext *ic)
@@ -18,7 +46,8 @@ void VipyState::keyEvent(fcitx::KeyEvent &event) {
     if (event.key().states().test(fcitx::KeyState::Ctrl)) modifiers |= 2;
     if (event.key().states().test(fcitx::KeyState::Alt)) modifiers |= 4;
     const auto result =
-        engine_.processKey(event.key().sym(), modifiers, event.isRelease());
+        engine_.processKey(keyToken(event.key().sym()), modifiers,
+                           event.isRelease());
     if (!result.commit.empty() && ic_) ic_->commitString(result.commit);
     current_ = result.preedit;
     cursor_ = result.cursor;

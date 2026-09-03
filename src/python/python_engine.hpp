@@ -24,7 +24,8 @@ public:
     PythonEngine &operator=(const PythonEngine &) = delete;
 
     void setSchema(vipy::InputMethod method);
-    ProcessResult processKey(int keysym, int modifiers, bool isRelease) const;
+    ProcessResult processKey(const std::string &key, int modifiers,
+                             bool isRelease) const;
     std::string commitText() const;
     void setConfig(const char *key, bool value) const;
     void setConfig(const char *key, const std::string &value) const;
