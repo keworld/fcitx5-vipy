@@ -58,7 +58,10 @@ void VipyState::updatePreedit() {
         ic_->capabilityFlags().test(fcitx::CapabilityFlag::Preedit);
     fcitx::TextFormatFlags formatFlags{fcitx::TextFormatFlag::Underline};
     fcitx::Text text(current_, formatFlags);
-    text.setCursor(cursor_);
+    // fcitx::Text stores the cursor as a UTF-8 byte offset. The Python
+    // engine reports a character offset, and the preedit cursor is always
+    // required at the end of the current text.
+    text.setCursor(static_cast<int>(current_.size()));
     if (useClientPreedit) {
         inputPanel.setPreedit(fcitx::Text{});
         inputPanel.setClientPreedit(text);
