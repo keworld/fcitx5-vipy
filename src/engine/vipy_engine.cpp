@@ -24,7 +24,8 @@ VietnameseInputMethodEngine::VietnameseInputMethodEngine(fcitx::Instance *instan
                    [this] {
                        config_.enableLoneW.setValue(!*config_.enableLoneW);
                        engine_.setConfig("enable_lone_w", *config_.enableLoneW);
-                       safeSaveAsIni(config_, "conf/vipy.conf");
+                       saveConfig();
+                       updateActions();
                    }),
       spellCheckAction_("Spell check", [this] { return *config_.enableSpellCheck; },
                         [this] {
@@ -32,12 +33,14 @@ VietnameseInputMethodEngine::VietnameseInputMethodEngine(fcitx::Instance *instan
                                 !*config_.enableSpellCheck);
                             engine_.setConfig("enable_spell_check",
                                               *config_.enableSpellCheck);
-                            safeSaveAsIni(config_, "conf/vipy.conf");
+                            saveConfig();
+                            updateActions();
                         }),
       macroAction_("Macros", [this] { return *config_.enableMacro; }, [this] {
           config_.enableMacro.setValue(!*config_.enableMacro);
           engine_.setConfig("enable_macro", *config_.enableMacro);
-          safeSaveAsIni(config_, "conf/vipy.conf");
+          saveConfig();
+          updateActions();
       }),
       autoDecomposeAction_(
           "Automatic decomposition",
@@ -46,7 +49,8 @@ VietnameseInputMethodEngine::VietnameseInputMethodEngine(fcitx::Instance *instan
                   !*config_.enableAutoDecompose);
               engine_.setConfig("enable_auto_decompose",
                                 *config_.enableAutoDecompose);
-              safeSaveAsIni(config_, "conf/vipy.conf");
+              saveConfig();
+              updateActions();
           }) {
     registerProperties();
     setupActions();
@@ -87,25 +91,46 @@ const fcitx::Configuration *VietnameseInputMethodEngine::getConfig() const {
 void VietnameseInputMethodEngine::setConfig(const fcitx::RawConfig &config) {
     config_.load(config, true);
     engine_.setSchema(*config_.inputMethod);
-    engine_.setConfig("enable_lone_w", *config_.enableLoneW);
-    engine_.setConfig("enable_spell_check", *config_.enableSpellCheck);
-    engine_.setConfig("enable_macro", *config_.enableMacro);
-    engine_.setConfig("enable_auto_decompose", *config_.enableAutoDecompose);
-    engine_.setConfig("macro_file",
-                      std::string(VIPY_DATA_DIR) + "/vietnamese.macro");
+    syncPythonConfig();
     resetAllStates();
-    safeSaveAsIni(config_, "conf/vipy.conf");
+    saveConfig();
+    updateActions();
 }
 
 void VietnameseInputMethodEngine::reloadConfig() {
-    readAsIni(config_, "conf/vipy.conf");
+    readAsIni(config_, fcitx::StandardPathsType::Config, "addon/vipy.conf");
     engine_.setSchema(*config_.inputMethod);
+    syncPythonConfig();
+    updateActions();
+}
+
+void VietnameseInputMethodEngine::syncPythonConfig() {
     engine_.setConfig("enable_lone_w", *config_.enableLoneW);
     engine_.setConfig("enable_spell_check", *config_.enableSpellCheck);
     engine_.setConfig("enable_macro", *config_.enableMacro);
     engine_.setConfig("enable_auto_decompose", *config_.enableAutoDecompose);
     engine_.setConfig("macro_file",
                       std::string(VIPY_DATA_DIR) + "/vietnamese.macro");
+}
+
+void VietnameseInputMethodEngine::updateActions() {
+    instance_->inputContextManager().foreach([this](fcitx::InputContext *ic) {
+        modeAction_.update(ic);
+        telexAction_.update(ic);
+        vniAction_.update(ic);
+        loneWAction_.update(ic);
+        spellCheckAction_.update(ic);
+        macroAction_.update(ic);
+        autoDecomposeAction_.update(ic);
+        return true;
+    });
+}
+
+void VietnameseInputMethodEngine::saveConfig() {
+    if (!safeSaveAsIni(config_, fcitx::StandardPathsType::Config,
+                      "addon/vipy.conf")) {
+        FCITX_ERROR() << "Failed to save Vipy configuration";
+    }
 }
 
 std::string VietnameseInputMethodEngine::subMode(const fcitx::InputMethodEntry &,
@@ -163,7 +188,10 @@ void VietnameseInputMethodEngine::switchMode(InputMethod mode,
     }
     config_.inputMethod.setValue(mode);
     engine_.setSchema(mode);
-    safeSaveAsIni(config_, "conf/vipy.conf");
+    syncPythonConfig();
+    safeSaveAsIni(config_, fcitx::StandardPathsType::Config,
+                  "addon/vipy.conf");
+    updateActions();
 }
 
 void VietnameseInputMethodEngine::resetState(fcitx::InputContext *ic) {

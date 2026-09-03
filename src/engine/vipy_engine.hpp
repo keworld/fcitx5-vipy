@@ -38,6 +38,9 @@ private:
     void setupActions();
     void registerProperties();
     void switchMode(InputMethod mode, fcitx::InputContext *ic);
+    void syncPythonConfig();
+    void updateActions();
+    void saveConfig();
     void resetState(fcitx::InputContext *ic);
     void resetAllStates();
 
