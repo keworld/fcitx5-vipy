@@ -5,8 +5,8 @@
 #include "python/python_engine.hpp"
 #include "python/python_runtime.hpp"
 #include "vipy_state.hpp"
-#include "vipy/vipy_config.hpp"
-#include "vipy/vipy-icon-resolver.hpp"
+#include "vipy_config.hpp"
+#include "../fcitx5/vipy-icon-resolver.hpp"
 
 #include <fcitx/inputmethodengine.h>
 #include <fcitx/instance.h>

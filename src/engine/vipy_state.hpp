@@ -2,7 +2,7 @@
 #define VIPY_STATE_HPP
 
 #include "python/python_engine.hpp"
-#include "vipy/vipy_config.hpp"
+#include "vipy_config.hpp"
 
 #include <fcitx/event.h>
 #include <fcitx/inputcontextproperty.h>

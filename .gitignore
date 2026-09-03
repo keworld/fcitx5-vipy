@@ -3,6 +3,5 @@ build/
 .idea
 *.so
 *.o
-*.hpp
 compile_commands.json
 cmake-build-debug/

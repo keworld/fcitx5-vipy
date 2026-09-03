@@ -1,4 +1,4 @@
-#include "vipy/vipy-icon-resolver.hpp"
+#include "vipy-icon-resolver.hpp"
 
 #include <unistd.h>
 

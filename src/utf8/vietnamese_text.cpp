@@ -1,6 +1,6 @@
 #include "vietnamese_text.hpp"
 
-#include "vipy/utf8_helper.hpp"
+#include "utf8_helper.hpp"
 
 namespace vipy::utf8 {
 

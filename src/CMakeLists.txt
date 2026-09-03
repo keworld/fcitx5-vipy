@@ -1,8 +1,9 @@
 add_library(vipy MODULE
         # Headers (Khai báo để CLion nhận diện project target)
-        ${CMAKE_SOURCE_DIR}/include/vipy/utf8_helper.hpp
-        ${CMAKE_SOURCE_DIR}/include/vipy/vipy_config.hpp
-        ${CMAKE_SOURCE_DIR}/include/vipy/vipy-icon-resolver.hpp
+        input_method.hpp
+        utf8/utf8_helper.hpp
+        engine/vipy_config.hpp
+        fcitx5/vipy-icon-resolver.hpp
 
         # Sources
         fcitx5/vipy-icon-resolver.cpp
@@ -19,7 +20,6 @@ add_library(vipy MODULE
 
 # Định nghĩa Include Directories
 target_include_directories(vipy PRIVATE
-        ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_compile_definitions(vipy PRIVATE

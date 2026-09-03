@@ -2,7 +2,7 @@
 #define VIPY_PYTHON_ENGINE_HPP
 
 #include "python_runtime.hpp"
-#include "vipy/input_method.hpp"
+#include "input_method.hpp"
 
 #include <string>
 
