@@ -62,9 +62,11 @@ def _keysym_to_char(keysym: int, mods: int) -> str:
     """Dịch keysym chữ/số thành ký tự, tôn trọng Shift."""
     if keysym == KEY_SPACE:
         return " "
-    if 0x61 <= keysym <= 0x7A:                       # a-z
+    if 0x61 <= keysym <= 0x7A or 0x41 <= keysym <= 0x5A:  # a-z/A-Z
         ch = chr(keysym)
-        return ch.upper() if (mods & MOD_SHIFT) else ch
+        if mods & MOD_SHIFT:
+            return ch.upper()
+        return ch
     if 0x30 <= keysym <= 0x39:                       # 0-9
         return chr(keysym)
     return ""
