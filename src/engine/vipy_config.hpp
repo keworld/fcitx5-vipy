@@ -15,6 +15,14 @@ FCITX_CONFIGURATION(
     VipyConfig,
     fcitx::Option<InputMethod> inputMethod{
         this, "InputMethod", "Input Method", InputMethod::Telex};
+    fcitx::Option<bool> enableLoneW{
+        this, "EnableLoneW", "Enable lone w", true};
+    fcitx::Option<bool> enableSpellCheck{
+        this, "EnableSpellCheck", "Enable spell checking", true};
+    fcitx::Option<bool> enableMacro{
+        this, "EnableMacro", "Enable macros", true};
+    fcitx::Option<bool> enableAutoDecompose{
+        this, "EnableAutoDecompose", "Enable automatic decomposition", true};
 );
 
 } // namespace vipy

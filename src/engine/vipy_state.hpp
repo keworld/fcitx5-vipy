@@ -28,7 +28,7 @@ private:
     VipyConfig &config_;
     fcitx::InputContext *ic_;
     std::string current_;
-    std::string raw_;
+    int cursor_ = 0;
 };
 
 } // namespace vipy::fcitx_wrapper

@@ -27,6 +27,8 @@ public:
                                 fcitx::InputContext &) override;
     void activate(const fcitx::InputMethodEntry &,
                   fcitx::InputContextEvent &event) override;
+    void deactivate(const fcitx::InputMethodEntry &,
+                    fcitx::InputContextEvent &event) override;
     void reset(const fcitx::InputMethodEntry &,
                fcitx::InputContextEvent &event) override;
     void keyEvent(const fcitx::InputMethodEntry &,
@@ -48,6 +50,10 @@ private:
     fcitx::SimpleAction modeAction_;
     ModeAction telexAction_;
     ModeAction vniAction_;
+    ToggleAction loneWAction_;
+    ToggleAction spellCheckAction_;
+    ToggleAction macroAction_;
+    ToggleAction autoDecomposeAction_;
 };
 
 } // namespace vipy::fcitx_wrapper

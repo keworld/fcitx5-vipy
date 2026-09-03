@@ -19,7 +19,35 @@ VietnameseInputMethodEngine::VietnameseInputMethodEngine(fcitx::Instance *instan
           [this](auto *ic) { switchMode(InputMethod::Telex, ic); }),
       vniAction_(
           "VNI", [this] { return *config_.inputMethod == InputMethod::Vni; },
-          [this](auto *ic) { switchMode(InputMethod::Vni, ic); }) {
+          [this](auto *ic) { switchMode(InputMethod::Vni, ic); }),
+      loneWAction_("Lone w", [this] { return *config_.enableLoneW; },
+                   [this] {
+                       config_.enableLoneW.setValue(!*config_.enableLoneW);
+                       engine_.setConfig("enable_lone_w", *config_.enableLoneW);
+                       safeSaveAsIni(config_, "conf/vipy.conf");
+                   }),
+      spellCheckAction_("Spell check", [this] { return *config_.enableSpellCheck; },
+                        [this] {
+                            config_.enableSpellCheck.setValue(
+                                !*config_.enableSpellCheck);
+                            engine_.setConfig("enable_spell_check",
+                                              *config_.enableSpellCheck);
+                            safeSaveAsIni(config_, "conf/vipy.conf");
+                        }),
+      macroAction_("Macros", [this] { return *config_.enableMacro; }, [this] {
+          config_.enableMacro.setValue(!*config_.enableMacro);
+          engine_.setConfig("enable_macro", *config_.enableMacro);
+          safeSaveAsIni(config_, "conf/vipy.conf");
+      }),
+      autoDecomposeAction_(
+          "Automatic decomposition",
+          [this] { return *config_.enableAutoDecompose; }, [this] {
+              config_.enableAutoDecompose.setValue(
+                  !*config_.enableAutoDecompose);
+              engine_.setConfig("enable_auto_decompose",
+                                *config_.enableAutoDecompose);
+              safeSaveAsIni(config_, "conf/vipy.conf");
+          }) {
     registerProperties();
     setupActions();
     reloadConfig();
@@ -38,6 +66,10 @@ void VietnameseInputMethodEngine::setupActions() {
     }
     modeMenu_.addAction(&telexAction_);
     modeMenu_.addAction(&vniAction_);
+    modeMenu_.addAction(&loneWAction_);
+    modeMenu_.addAction(&spellCheckAction_);
+    modeMenu_.addAction(&macroAction_);
+    modeMenu_.addAction(&autoDecomposeAction_);
     modeAction_.setShortText("Input Method");
     modeAction_.setIcon("fcitx-vipy");
     modeAction_.setMenu(&modeMenu_);
@@ -50,6 +82,12 @@ const fcitx::Configuration *VietnameseInputMethodEngine::getConfig() const {
 void VietnameseInputMethodEngine::setConfig(const fcitx::RawConfig &config) {
     config_.load(config, true);
     engine_.setSchema(*config_.inputMethod);
+    engine_.setConfig("enable_lone_w", *config_.enableLoneW);
+    engine_.setConfig("enable_spell_check", *config_.enableSpellCheck);
+    engine_.setConfig("enable_macro", *config_.enableMacro);
+    engine_.setConfig("enable_auto_decompose", *config_.enableAutoDecompose);
+    engine_.setConfig("macro_file",
+                      std::string(VIPY_DATA_DIR) + "/vietnamese.macro");
     resetAllStates();
     safeSaveAsIni(config_, "conf/vipy.conf");
 }
@@ -57,6 +95,12 @@ void VietnameseInputMethodEngine::setConfig(const fcitx::RawConfig &config) {
 void VietnameseInputMethodEngine::reloadConfig() {
     readAsIni(config_, "conf/vipy.conf");
     engine_.setSchema(*config_.inputMethod);
+    engine_.setConfig("enable_lone_w", *config_.enableLoneW);
+    engine_.setConfig("enable_spell_check", *config_.enableSpellCheck);
+    engine_.setConfig("enable_macro", *config_.enableMacro);
+    engine_.setConfig("enable_auto_decompose", *config_.enableAutoDecompose);
+    engine_.setConfig("macro_file",
+                      std::string(VIPY_DATA_DIR) + "/vietnamese.macro");
 }
 
 std::string VietnameseInputMethodEngine::subMode(const fcitx::InputMethodEntry &,
@@ -81,6 +125,14 @@ void VietnameseInputMethodEngine::activate(const fcitx::InputMethodEntry &,
         ic->statusArea().addAction(fcitx::StatusGroup::InputMethod,
                                    &modeAction_);
     }
+}
+
+void VietnameseInputMethodEngine::deactivate(
+    const fcitx::InputMethodEntry &, fcitx::InputContextEvent &event) {
+    if (auto *ic = event.inputContext()) {
+        ic->propertyFor(&stateFactory_)->commitAndReset();
+    }
+    engine_.deactivate();
 }
 
 void VietnameseInputMethodEngine::reset(const fcitx::InputMethodEntry &,

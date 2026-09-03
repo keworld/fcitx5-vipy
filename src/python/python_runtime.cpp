@@ -3,6 +3,7 @@
 #include "python_error.hpp"
 
 #include <dlfcn.h>
+#include <cstdlib>
 
 #include <iostream>
 
@@ -28,6 +29,7 @@ void *makePythonSymbolsGlobal() {
 } // namespace
 
 PythonRuntime::PythonRuntime() : handle_(makePythonSymbolsGlobal()) {
+    setenv("FCITX_TELEX_DICT", VIPY_DATA_DIR "/vietnamese.cm.dict", 0);
     Py_Initialize();
     GilGuard gil;
     PyObject *path = PySys_GetObject("path");

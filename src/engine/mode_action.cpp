@@ -28,4 +28,27 @@ void ModeAction::activate(fcitx::InputContext *ic) {
     activate_(ic);
 }
 
+ToggleAction::ToggleAction(std::string text, std::function<bool()> checked,
+                           std::function<void()> toggle)
+    : text_(std::move(text)), checked_(std::move(checked)),
+      toggle_(std::move(toggle)) {
+    setCheckable(true);
+}
+
+std::string ToggleAction::shortText(fcitx::InputContext *) const {
+    return text_;
+}
+
+std::string ToggleAction::icon(fcitx::InputContext *) const {
+    return "fcitx-vipy";
+}
+
+bool ToggleAction::isChecked(fcitx::InputContext *) const {
+    return checked_();
+}
+
+void ToggleAction::activate(fcitx::InputContext *) {
+    toggle_();
+}
+
 } // namespace vipy::fcitx_wrapper

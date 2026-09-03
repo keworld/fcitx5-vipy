@@ -35,3 +35,8 @@ foreach(SIZE 22 24)
     list(APPEND VIPY_PNG_OUTPUTS ${OUTPUT})
 endforeach()
 add_custom_target(vipy_icons ALL DEPENDS ${VIPY_PNG_OUTPUTS})
+
+install(FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/dict/vietnamese.cm.dict
+        ${CMAKE_CURRENT_SOURCE_DIR}/dict/vietnamese.macro
+        DESTINATION ${VIPY_DATA_DIR})

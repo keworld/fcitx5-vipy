@@ -28,6 +28,9 @@ endif()
 set(VIPY_PYTHON_MODULE_DIR
         "$ENV{HOME}/.config/fcitx5-vipy/script"
         CACHE PATH "User directory for Vipy Python modules")
+set(VIPY_DATA_DIR
+        "$ENV{HOME}/.config/fcitx5-vipy/data"
+        CACHE PATH "User directory for Vipy data files")
 
 file(GLOB VIPY_PYTHON_MODULES CONFIGURE_DEPENDS
         "${CMAKE_SOURCE_DIR}/scripts/*.py")
