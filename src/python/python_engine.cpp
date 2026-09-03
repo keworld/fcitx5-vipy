@@ -15,44 +15,34 @@ PythonEngine::PythonEngine(PythonRuntime &runtime) : runtime_(runtime) {
 
 PythonEngine::~PythonEngine() {
     GilGuard gil;
-    engine_.reset();
+    engines_.clear();
     module_.reset();
 }
 
 void PythonEngine::setSchema(vipy::InputMethod method) {
     currentMethod_ = method;
     GilGuard gil;
-    engine_.reset();
-    const char *schemaName = method == vipy::InputMethod::Telex ? "telex" : "vni";
-    if (!module_) {
-        std::cerr << "Cannot select schema: Python module is unavailable\n";
-        return;
-    }
-    PyObjectPtr<> engineClass(PyObject_GetAttrString(module_.get(), "VietnameseEngine"));
-    if (engineClass) {
-        engine_.reset(PyObject_CallFunctionObjArgs(engineClass.get(), nullptr));
-        if (engine_) {
-            PyObjectPtr<> result(PyObject_CallMethod(
-                engine_.get(), "set_config", "ss", "input_method", schemaName));
-            if (!result) {
-                logPythonError("set_config(input_method)");
-            }
-        }
-    }
-    if (!engine_) {
-        logPythonError("creating Vietnamese engine");
+    for (auto &entry : engines_) {
+        entry.second.reset(createEngine());
     }
 }
 
 PythonEngine::ProcessResult PythonEngine::processKey(
     const std::string &key, int modifiers, bool isRelease) const {
+    return processKey(nullptr, key, modifiers, isRelease);
+}
+
+PythonEngine::ProcessResult PythonEngine::processKey(
+    const void *context, const std::string &key, int modifiers,
+    bool isRelease) const {
     ProcessResult result;
     GilGuard gil;
-    if (!engine_) {
+    PyObject *engine = engineFor(context);
+    if (!engine) {
         return result;
     }
     PyObjectPtr<> value(PyObject_CallMethod(
-        engine_.get(), "process_key", "sii", key.c_str(), modifiers,
+        engine, "process_key", "sii", key.c_str(), modifiers,
         isRelease ? 1 : 0));
     if (!value) {
         logPythonError("process_key");
@@ -80,10 +70,15 @@ PythonEngine::ProcessResult PythonEngine::processKey(
 }
 
 std::string PythonEngine::commitText() const {
+    return commitText(nullptr);
+}
+
+std::string PythonEngine::commitText(const void *context) const {
     GilGuard gil;
-    if (!engine_) return {};
+    PyObject *engine = engineFor(context);
+    if (!engine) return {};
     PyObjectPtr<> value(
-        PyObject_CallMethod(engine_.get(), "get_commit_text", nullptr));
+        PyObject_CallMethod(engine, "get_commit_text", nullptr));
     if (!value) {
         logPythonError("get_commit_text");
         return {};
@@ -100,61 +95,143 @@ std::string PythonEngine::commitText() const {
 
 void PythonEngine::applyConfig(const char *key, PyObject *value) const {
     GilGuard gil;
-    if (!engine_ || !value) return;
-    PyObjectPtr<> result(
-        PyObject_CallMethod(engine_.get(), "set_config", "sO", key, value));
+    if (!value) return;
+    for (const auto &entry : engines_) {
+        applyConfig(entry.second.get(), key, value);
+    }
+}
+
+void PythonEngine::applyConfig(PyObject *engine, const char *key,
+                               PyObject *value) const {
+    if (!engine || !value) return;
+    PyObjectPtr<> result(PyObject_CallMethod(engine, "set_config", "sO", key,
+                                             value));
     if (!result) logPythonError("set_config");
 }
 
 void PythonEngine::setConfig(const char *key, bool value) const {
+    GilGuard gil;
+    if (std::string(key) == "enable_lone_w") enableLoneW_ = value;
+    if (std::string(key) == "enable_spell_check") enableSpellCheck_ = value;
+    if (std::string(key) == "enable_macro") enableMacro_ = value;
+    if (std::string(key) == "enable_auto_decompose") {
+        enableAutoDecompose_ = value;
+    }
     PyObjectPtr<> pythonValue(PyBool_FromLong(value ? 1 : 0));
     applyConfig(key, pythonValue.get());
 }
 
 void PythonEngine::setConfig(const char *key, const std::string &value) const {
+    GilGuard gil;
+    if (std::string(key) == "macro_file") macroFile_ = value;
     PyObjectPtr<> pythonValue(PyUnicode_FromString(value.c_str()));
     applyConfig(key, pythonValue.get());
 }
 
 void PythonEngine::setSurroundingText(const std::string &text, int cursor) const {
     GilGuard gil;
-    if (!engine_) return;
+    PyObject *engine = engineFor(nullptr);
+    if (!engine) return;
     PyObjectPtr<> result(PyObject_CallMethod(
-        engine_.get(), "set_surrounding_text", "si", text.c_str(), cursor));
+        engine, "set_surrounding_text", "si", text.c_str(), cursor));
     if (!result) logPythonError("set_surrounding_text");
 }
 
 void PythonEngine::deactivate() const {
     GilGuard gil;
-    if (!engine_) return;
-    PyObjectPtr<> result(PyObject_CallMethod(engine_.get(), "deactivate", nullptr));
+    for (const auto &entry : engines_) {
+        if (!entry.second) continue;
+        PyObjectPtr<> result(
+            PyObject_CallMethod(entry.second.get(), "deactivate", nullptr));
+        if (!result) logPythonError("deactivate");
+    }
+}
+
+void PythonEngine::deactivate(const void *context) const {
+    GilGuard gil;
+    PyObject *engine = engineFor(context);
+    if (!engine) return;
+    PyObjectPtr<> result(PyObject_CallMethod(engine, "deactivate", nullptr));
     if (!result) logPythonError("deactivate");
 }
 
 void PythonEngine::reset() const {
+    resetState(nullptr);
+}
+
+void PythonEngine::resetState() const {
+    resetState(nullptr);
+}
+
+void PythonEngine::resetState(const void *context) const {
     GilGuard gil;
-    if (!engine_) return;
-    PyObjectPtr<> result(PyObject_CallMethod(engine_.get(), "reset", nullptr));
+    PyObject *engine = engineFor(context);
+    if (!engine) return;
+    PyObjectPtr<> result(PyObject_CallMethod(engine, "reset", nullptr));
     if (!result) logPythonError("reset");
 }
 
-void PythonEngine::resetState() {
-    reset();
+PyObject *PythonEngine::engineFor(const void *context) const {
+    auto it = engines_.find(context);
+    if (it != engines_.end()) {
+        return it->second.get();
+    }
+    auto inserted = engines_.emplace(context, PyObjectPtr<>()).first;
+    inserted->second.reset(createEngine());
+    return inserted->second.get();
+}
+
+PyObject *PythonEngine::createEngine() const {
+    if (!module_) {
+        std::cerr << "Cannot create Python engine: module is unavailable\n";
+        return nullptr;
+    }
+    PyObjectPtr<> engineClass(
+        PyObject_GetAttrString(module_.get(), "VietnameseEngine"));
+    if (!engineClass) {
+        logPythonError("creating Vietnamese engine class");
+        return nullptr;
+    }
+    PyObject *engine = PyObject_CallFunctionObjArgs(engineClass.get(), nullptr);
+    if (!engine) {
+        logPythonError("creating Vietnamese engine");
+        return nullptr;
+    }
+    const char *schemaName =
+        currentMethod_ == vipy::InputMethod::Telex ? "telex" : "vni";
+    PyObjectPtr<> schemaResult(
+        PyObject_CallMethod(engine, "set_config", "ss", "input_method",
+                            schemaName));
+    if (!schemaResult) logPythonError("set_config(input_method)");
+    auto setBool = [&](const char *key, bool value) {
+        PyObjectPtr<> pythonValue(PyBool_FromLong(value ? 1 : 0));
+        applyConfig(engine, key, pythonValue.get());
+    };
+    setBool("enable_lone_w", enableLoneW_);
+    setBool("enable_spell_check", enableSpellCheck_);
+    setBool("enable_macro", enableMacro_);
+    setBool("enable_auto_decompose", enableAutoDecompose_);
+    if (!macroFile_.empty()) {
+        PyObjectPtr<> pythonValue(PyUnicode_FromString(macroFile_.c_str()));
+        applyConfig(engine, "macro_file", pythonValue.get());
+    }
+    return engine;
 }
 
 std::string PythonEngine::callString(const char *name, const std::string &word,
                                      const std::string &key) const {
     GilGuard gil;
-    if (!engine_) {
+    PyObject *engine = engineFor(nullptr);
+    if (!engine) {
         return {};
     }
     PyObject *rawValue = nullptr;
     if (word.empty() && key.empty()) {
-        rawValue = PyObject_CallMethod(engine_.get(), name, nullptr);
+        rawValue = PyObject_CallMethod(engine, name, nullptr);
     } else if (key.empty()) {
-        rawValue = PyObject_CallMethod(engine_.get(), name, "s", word.c_str());
+        rawValue = PyObject_CallMethod(engine, name, "s", word.c_str());
     } else {
-        rawValue = PyObject_CallMethod(engine_.get(), name, "ss", word.c_str(),
+        rawValue = PyObject_CallMethod(engine, name, "ss", word.c_str(),
                                        key.c_str());
     }
     PyObjectPtr<> value(rawValue);

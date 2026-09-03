@@ -216,11 +216,15 @@ class VietnameseEngine:
         (text, len)
         """
         text = self._preedit
-        if (self._config["enable_spell_check"]
-                and self._config["enable_auto_decompose"]
-                and (self._literal
-                     or (self._base
-                         and not self._dict.is_valid_word(self._base)))):
+        if self._base and self._config["enable_spell_check"]:
+            invalid = not self._dict.is_valid_word(self._base)
+        else:
+            invalid = bool(self._base and
+                           not self._phon.is_valid_shape(self._base))
+        needs_recovery = bool(self._literal) or invalid
+        if self._config["enable_auto_decompose"] and needs_recovery:
+            text = self.decompose(text)
+        elif self._config["enable_spell_check"] and needs_recovery:
             text = self._raw_text or text
         text = self._apply_macro(text)
         if (text == self._preedit and self._raw_text != self._preedit
@@ -229,6 +233,53 @@ class VietnameseEngine:
             if raw_macro != self._raw_text:
                 text = raw_macro
         return text, len(text)
+
+    def decompose(self, word: str) -> str:
+        """Convert composed Vietnamese text back to this schema's keystrokes."""
+        if not word:
+            return word
+        out = []
+        tone = 0
+        tone_upper = False
+        valid_shape = self._phon.is_valid_shape(word)
+        for char in word:
+            lower = char.lower()
+            if lower == "đ":
+                raw = self._schema.raw_mark(lower) if len(word) == 1 else "d"
+                out.append(raw.upper() if char.isupper() else raw)
+                continue
+            stripped = self._phon.strip_tone(char)
+            mark = stripped.lower()
+            if mark in self._schema.RAW_MARKS:
+                raw = (self._schema.raw_mark(mark) if valid_shape
+                       else self._phon.bare(stripped))
+                out.append(raw.upper() if char.isupper() else raw)
+            elif self._phon.word_tone(char):
+                out.append(stripped.upper() if char.isupper() else stripped)
+            else:
+                out.append(char)
+            current_tone = self._phon.word_tone(char)
+            if current_tone:
+                tone = current_tone
+                tone_upper = char.isupper()
+        if not valid_shape and any(
+            self._phon.strip_tone(char).lower() == "â" for char in word
+        ):
+            decomposed = "".join(out)
+            vowel_at = next(
+                (i for i, char in enumerate(decomposed)
+                 if char.lower() == "a"),
+                -1,
+            )
+            if vowel_at >= 0 and len(decomposed) >= 3:
+                insert_at = min(vowel_at + 2, len(decomposed))
+                decomposed = (decomposed[:insert_at] + "a" +
+                              decomposed[insert_at:])
+                out = [decomposed]
+        if tone:
+            tone_key = self._schema.tone_key(tone)
+            out.append(tone_key.upper() if tone_upper else tone_key)
+        return "".join(out)
 
     def get_raw_text(self) -> tuple:
         """

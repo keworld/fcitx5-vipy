@@ -23,39 +23,32 @@ VietnameseInputMethodEngine::VietnameseInputMethodEngine(fcitx::Instance *instan
       loneWAction_("Lone w", [this] { return *config_.enableLoneW; },
                    [this] {
                        config_.enableLoneW.setValue(!*config_.enableLoneW);
-                       engine_.setConfig("enable_lone_w", *config_.enableLoneW);
-                       saveConfig();
-                       updateActions();
+                       setFeatureConfig("enable_lone_w", *config_.enableLoneW);
                    }),
       spellCheckAction_("Spell check", [this] { return *config_.enableSpellCheck; },
                         [this] {
                             config_.enableSpellCheck.setValue(
                                 !*config_.enableSpellCheck);
-                            engine_.setConfig("enable_spell_check",
-                                              *config_.enableSpellCheck);
-                            saveConfig();
-                            updateActions();
+                            setFeatureConfig("enable_spell_check",
+                                             *config_.enableSpellCheck);
                         }),
       macroAction_("Macros", [this] { return *config_.enableMacro; }, [this] {
           config_.enableMacro.setValue(!*config_.enableMacro);
-          engine_.setConfig("enable_macro", *config_.enableMacro);
-          saveConfig();
-          updateActions();
+          setFeatureConfig("enable_macro", *config_.enableMacro);
       }),
       autoDecomposeAction_(
           "Automatic decomposition",
           [this] { return *config_.enableAutoDecompose; }, [this] {
               config_.enableAutoDecompose.setValue(
                   !*config_.enableAutoDecompose);
-              engine_.setConfig("enable_auto_decompose",
-                                *config_.enableAutoDecompose);
-              saveConfig();
-              updateActions();
+              setFeatureConfig("enable_auto_decompose",
+                               *config_.enableAutoDecompose);
           }) {
     reloadConfig();
     registerProperties();
     setupActions();
     updateActions();
+    initialized_ = true;
 }
 
 void VietnameseInputMethodEngine::registerProperties() {
@@ -102,6 +95,10 @@ void VietnameseInputMethodEngine::reloadConfig() {
     readAsIni(config_, fcitx::StandardPathsType::Config, "addon/vipy.conf");
     engine_.setSchema(*config_.inputMethod);
     syncPythonConfig();
+    if (initialized_) {
+        resetAllStates();
+        updateActions();
+    }
 }
 
 void VietnameseInputMethodEngine::syncPythonConfig() {
@@ -111,6 +108,13 @@ void VietnameseInputMethodEngine::syncPythonConfig() {
     engine_.setConfig("enable_auto_decompose", *config_.enableAutoDecompose);
     engine_.setConfig("macro_file",
                       std::string(VIPY_DATA_DIR) + "/vietnamese.macro");
+}
+
+void VietnameseInputMethodEngine::setFeatureConfig(const char *key, bool value) {
+    engine_.setConfig(key, value);
+    resetAllStates();
+    saveConfig();
+    updateActions();
 }
 
 void VietnameseInputMethodEngine::updateActions() {
@@ -189,6 +193,7 @@ void VietnameseInputMethodEngine::switchMode(InputMethod mode,
     config_.inputMethod.setValue(mode);
     engine_.setSchema(mode);
     syncPythonConfig();
+    resetAllStates();
     safeSaveAsIni(config_, fcitx::StandardPathsType::Config,
                   "addon/vipy.conf");
     updateActions();

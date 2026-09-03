@@ -46,7 +46,7 @@ void VipyState::keyEvent(fcitx::KeyEvent &event) {
     if (event.key().states().test(fcitx::KeyState::Ctrl)) modifiers |= 2;
     if (event.key().states().test(fcitx::KeyState::Alt)) modifiers |= 4;
     const auto result =
-        engine_.processKey(keyToken(event.key().sym()), modifiers,
+        engine_.processKey(ic_, keyToken(event.key().sym()), modifiers,
                            event.isRelease());
     if (!result.commit.empty() && ic_) ic_->commitString(result.commit);
     current_ = result.preedit;
@@ -56,7 +56,7 @@ void VipyState::keyEvent(fcitx::KeyEvent &event) {
 }
 
 void VipyState::reset() {
-    engine_.resetState();
+    engine_.resetState(ic_);
     current_.clear();
     cursor_ = 0;
     updatePreedit();
@@ -64,7 +64,7 @@ void VipyState::reset() {
 
 void VipyState::commitAndReset(const std::string &suffix) {
     if (ic_ && !current_.empty()) {
-        const std::string committed = engine_.commitText();
+        const std::string committed = engine_.commitText(ic_);
         if (!committed.empty()) {
             ic_->commitString(committed + suffix);
         }

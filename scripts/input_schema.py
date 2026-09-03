@@ -15,6 +15,7 @@ class InputSchema(ABC):
     TONE_KEYS: dict = {}
     MARK_KEYS: tuple = ()
     MARK_PAIRS: dict = {}
+    RAW_MARKS: dict = {}
 
     @abstractmethod
     def name(cls) -> str: ...
@@ -107,6 +108,17 @@ class InputSchema(ABC):
         """
         return cls.TONE_KEYS.get(key.lower(), -1)
 
+    @classmethod
+    def tone_key(cls, tone: int) -> str:
+        for key, value in cls.TONE_KEYS.items():
+            if value == tone:
+                return key
+        return ""
+
+    @classmethod
+    def raw_mark(cls, char: str) -> str:
+        return cls.RAW_MARKS.get(char.lower(), char)
+
 class TelexSchema(InputSchema):
     TONE_KEYS = {'s': 1, 'f': 2, 'r': 3, 'x': 4, 'j': 5}
     MARK_KEYS = ('w', 'a', 'e', 'o', 'd')
@@ -118,6 +130,10 @@ class TelexSchema(InputSchema):
         'ow': 3,
         'uw': 3,
         'dd': 4,
+    }
+    RAW_MARKS = {
+        'ă': 'aw', 'â': 'aa', 'ê': 'ee', 'ô': 'oo',
+        'ơ': 'ow', 'ư': 'uw', 'đ': 'dd',
     }
     LONE_W_ENABLED = True
 
@@ -153,6 +169,10 @@ class VNISchema(InputSchema):
         'o7': 3,
         'u7': 3,
         'd9': 4,
+    }
+    RAW_MARKS = {
+        'ă': 'a8', 'â': 'a6', 'ê': 'e6', 'ô': 'o6',
+        'ơ': 'o7', 'ư': 'u7', 'đ': 'd9',
     }
 
     @classmethod

@@ -117,6 +117,7 @@ class SyllableDict:
                     self.prefixes.add(('đ' + base[1:])[:i])
 
     def is_valid_prefix(self, prefix_low: str) -> bool:
+        prefix_low = str(prefix_low).casefold()
         if not prefix_low:
             return True
         if not self.prefixes:
@@ -125,6 +126,7 @@ class SyllableDict:
 
     def is_valid_word(self, word_low: str) -> bool:
         """kiểm tra từ HOÀN CHỈNH (có dấu) có trong từ điển không."""
+        word_low = str(word_low).casefold()
         if not word_low:
             return True
         if not self.words:

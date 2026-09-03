@@ -39,6 +39,7 @@ private:
     void registerProperties();
     void switchMode(InputMethod mode, fcitx::InputContext *ic);
     void syncPythonConfig();
+    void setFeatureConfig(const char *key, bool value);
     void updateActions();
     void saveConfig();
     void resetState(fcitx::InputContext *ic);
@@ -57,6 +58,7 @@ private:
     ToggleAction spellCheckAction_;
     ToggleAction macroAction_;
     ToggleAction autoDecomposeAction_;
+    bool initialized_ = false;
 };
 
 } // namespace vipy::fcitx_wrapper
