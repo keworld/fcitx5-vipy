@@ -5,9 +5,10 @@
 #include <fcitx-config/enum.h>
 #include <fcitx-config/option.h>
 
+#include "input_method.hpp"
+
 namespace vipy {
 
-enum class InputMethod { Telex, Vni };
 FCITX_CONFIG_ENUM_NAME(InputMethod, "Telex", "VNI");
 
 FCITX_CONFIGURATION(
