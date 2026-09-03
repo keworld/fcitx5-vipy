@@ -152,42 +152,42 @@ class VietnameseEngine:
             return self._flush()
 
         # --- Phím gõ thực sự: đi vào pipeline Telex/VNI ---
-        self._raw_text += ch
+        self._raw_text += key
         if self._literal:
-            self._literal += ch
+            self._literal += key
             self._sync_preedit()
             return self._result(consumed=True)
 
         word = self._base
         literal = ""
 
-        if self._lone_w_pending and ch.lower() == "w":
+        if self._lone_w_pending and key.lower() == "w":
             # ww -> escape: xóa ư vừa chèn, xuất w thường (chuẩn Telex)
             word = word[:-1]
-            literal = "W" if ch.isupper() else "w"
+            literal = "W" if key.isupper() else "w"
             action_type = "lone_w_escape"
         else:
-            action = self._schema.match(word, ch)
+            action = self._schema.match(word, key)
             action_type = action.type
             match action:
                 case Action(type="none"):
-                    new_word = word + ch
+                    new_word = word + key
                     if self._can_grow(new_word):
-                        word += ch
+                        word += key
                     else:
-                        literal = ch
+                        literal = key
                 case Action(type="mark", value=mark_val):
                     word = self._phon.place_mark(word, mark_val)
                 case Action(type="tone", value=tone_val):
                     word = self._phon.place_tone(word, tone_val)
                 case Action(type="toggle_tone"):
                     word = self._phon.strip_tone(word)
-                    literal = ch
+                    literal = key
                 case Action(type="toggle_mark", value=mark_val):
                     word = self._phon.strip_mark(word, mark_val)
-                    literal = ch
+                    literal = key
                 case Action(type="lone_w"):
-                    word += "Ư" if ch.isupper() else "ư"
+                    word += "Ư" if key.isupper() else "ư"
                     action_type = "lone_w"      # giữ cờ
 
         word = self._phon.reconstruction(word)
