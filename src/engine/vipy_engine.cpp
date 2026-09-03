@@ -61,7 +61,12 @@ void VietnameseInputMethodEngine::setupActions() {
     auto &ui = instance_->userInterfaceManager();
     if (!ui.registerAction("vipy-input-method", &modeAction_) ||
         !ui.registerAction("vipy-input-method-telex", &telexAction_) ||
-        !ui.registerAction("vipy-input-method-vni", &vniAction_)) {
+        !ui.registerAction("vipy-input-method-vni", &vniAction_) ||
+        !ui.registerAction("vipy-enable-lone-w", &loneWAction_) ||
+        !ui.registerAction("vipy-enable-spell-check", &spellCheckAction_) ||
+        !ui.registerAction("vipy-enable-macro", &macroAction_) ||
+        !ui.registerAction("vipy-enable-auto-decompose",
+                           &autoDecomposeAction_)) {
         FCITX_ERROR() << "Failed to register Vipy input method actions";
     }
     modeMenu_.addAction(&telexAction_);

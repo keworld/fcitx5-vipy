@@ -29,10 +29,15 @@ void PythonEngine::setSchema(vipy::InputMethod method) {
         return;
     }
     PyObjectPtr<> engineClass(PyObject_GetAttrString(module_.get(), "VietnameseEngine"));
-    PyObjectPtr<> schemaArg(PyUnicode_FromString(schemaName));
-    if (engineClass && schemaArg) {
-        engine_.reset(
-            PyObject_CallFunctionObjArgs(engineClass.get(), schemaArg.get(), nullptr));
+    if (engineClass) {
+        engine_.reset(PyObject_CallFunctionObjArgs(engineClass.get(), nullptr));
+        if (engine_) {
+            PyObjectPtr<> result(PyObject_CallMethod(
+                engine_.get(), "set_config", "ss", "input_method", schemaName));
+            if (!result) {
+                logPythonError("set_config(input_method)");
+            }
+        }
     }
     if (!engine_) {
         logPythonError("creating Vietnamese engine");
