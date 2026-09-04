@@ -50,10 +50,11 @@ cmake .. -DVIPY_ENABLE_NATIVE_OPTIMIZATIONS=ON
 make
 ```
 4. Cài đặt vào hệ thống: 
-```
 
 Khi đóng gói cho Arch Linux, package nên phụ thuộc `python` lúc chạy và
 `librsvg` lúc build (project dùng `rsvg-convert` để tạo status icon). Không
 truyền `VIPY_PYTHON_MODULE_DIR` hoặc `VIPY_DATA_DIR` trỏ vào thư mục home của
 máy build.bash
+```bash
 sudo make install
+```
