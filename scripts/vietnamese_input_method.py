@@ -3,7 +3,7 @@ VietnameseEngine — State Orchestrator Fcitx5 (giao tiếp qua C++ wrapper)
 và cho adapter (InputManager).
 
 Hợp đồng API:
-  - process_key_event(keysym, mods, is_release) -> dict:
+  - process_key(key, mods, is_release) -> dict:
       {
         "consumed": bool,   # True = nuốt phím, False = cho app tự xử lý
         "commit":   str,    # text cần commit ("" nếu không commit)
@@ -14,18 +14,11 @@ Hợp đồng API:
   - activate() / deactivate() / reset()
   - set_config(key, value) / get_config(key) / save()
 """
-import csv
-import logging
-import os
 
-try:
-    from .vietnamese_phonology import VietnamesePhonology
-    from .input_schema import TelexSchema, VNISchema, Action
-    from .syllable_dict import SyllableDict
-except ImportError:
-    from vietnamese_phonology import VietnamesePhonology
-    from input_schema import TelexSchema, VNISchema, Action
-    from syllable_dict import SyllableDict
+from .vietnamese_phonology import VietnamesePhonology
+from .input_schema import TelexSchema, VNISchema, Action
+from .syllable_dict import SyllableDict
+from .macro import apply_macro, load_macros
 
 # ---------------------------------------------------------------------------
 # Special key tokens passed by the Fcitx wrapper.
@@ -47,9 +40,6 @@ MOD_CTRL  = 1 << 1
 MOD_ALT   = 1 << 2
 
 HOTKEY_MASK = MOD_CTRL | MOD_ALT
-
-logger = logging.getLogger(__name__)
-
 
 class VietnameseEngine:
     def __init__(self, config: dict = None):
@@ -128,7 +118,7 @@ class VietnameseEngine:
                 return self._result(consumed=True)
             return self._result(consumed=False)
 
-        # Các keysym này kết thúc/ngắt từ và không bao giờ được đưa vào
+        # Các phím đặc biệt này kết thúc/ngắt từ và không bao giờ được đưa vào
         # pipeline Telex/VNI. Khi không có preedit, trả phím cho ứng dụng.
         if key in (KEY_RETURN, KEY_SPACE):
             return self._flush()
@@ -172,7 +162,7 @@ class VietnameseEngine:
             match action:
                 case Action(type="none"):
                     new_word = word + key
-                    if self._can_grow(new_word):
+                    if self._phon.can_grow(new_word):
                         word += key
                     else:
                         literal = key
@@ -217,7 +207,9 @@ class VietnameseEngine:
         """
         text = self._preedit
         if self._base and self._config["enable_spell_check"]:
-            invalid = not self._dict.is_valid_word(self._base)
+            # SyllableDict lưu từ ở dạng chữ thường; giữ nguyên hoa/thường
+            # của preedit nhưng chuẩn hóa riêng giá trị dùng để tra cứu.
+            invalid = not self._dict.is_valid_word(self._base.lower())
         else:
             invalid = bool(self._base and
                            not self._phon.is_valid_shape(self._base))
@@ -279,66 +271,11 @@ class VietnameseEngine:
         return self._config.get(key)
 
     def load_macro(self, path=None) -> int:
-        """Nạp macro từ file, giữ nguyên macro đã cấu hình thủ công.
-
-        Mỗi dòng CSV có dạng ``trigger,replacement``. Dòng trống và dòng bắt
-        đầu bằng ``#`` bị bỏ qua. Vẫn chấp nhận format TSV/``=`` cũ để tương
-        thích với file macro người dùng đã có.
-        Trả về số macro mới được nạp.
-        """
-        configured_path = path or self._config["macro_file"]
-        if not os.path.isabs(configured_path):
-            here = os.path.dirname(__file__)
-            candidates = (
-                os.path.join(here, configured_path),
-                os.path.join(here, "..", "data", configured_path),
-                os.path.expanduser(
-                    os.path.join("~/.config/fcitx5-vipy/data",
-                                 os.path.basename(configured_path))
-                ),
-            )
-            configured_path = next(
-                (candidate for candidate in candidates
-                 if os.path.isfile(candidate)),
-                candidates[0],
-            )
-        loaded = 0
-        try:
-            with open(configured_path, "r", encoding="utf-8") as macro_file:
-                for line_number, row in enumerate(csv.reader(macro_file), 1):
-                    line = ",".join(row)
-                    line = line.rstrip("\n\r")
-                    stripped = line.strip()
-                    if not stripped or stripped.startswith("#"):
-                        continue
-                    if len(row) >= 2:
-                        trigger, replacement = row[0], ",".join(row[1:])
-                    elif "\t" in line:
-                        trigger, replacement = line.split("\t", 1)
-                    elif "=>" in line:
-                        trigger, replacement = line.split("=>", 1)
-                    elif "=" in line:
-                        trigger, replacement = line.split("=", 1)
-                    else:
-                        logger.warning(
-                            "Bỏ qua macro không hợp lệ tại %s:%d",
-                            configured_path, line_number
-                        )
-                        continue
-                    trigger = trigger.strip()
-                    replacement = replacement.strip()
-                    if not trigger:
-                        logger.warning(
-                            "Bỏ qua macro rỗng tại %s:%d",
-                            configured_path, line_number
-                        )
-                        continue
-                    if trigger not in self._config["macros"]:
-                        self._config["macros"][trigger] = replacement
-                        loaded += 1
-        except OSError as exc:
-            logger.warning("Không thể tải macro từ %s: %s", configured_path, exc)
-        return loaded
+        """Nạp macro từ file, giữ nguyên macro đã cấu hình thủ công."""
+        return load_macros(
+            path or self._config["macro_file"],
+            self._config["macros"],
+        )
 
     def set_surrounding_text(self, text, cursor_pos):
         """
@@ -360,17 +297,13 @@ class VietnameseEngine:
     # ------------------------------------------------------------------
     # Nội bộ
     # ------------------------------------------------------------------
-    def _can_grow(self, text: str) -> bool:
-        # Dictionary validation must happen after reconstruction(). Before
-        # that step, Telex input can be a transitional spelling such as
-        # "nguơ" while the final form will be "người".
-        return self._phon.can_grow(text)
 
     def _apply_macro(self, text: str) -> str:
-        if not self._config["enable_macro"] or not text:
-            return text
-        macros = self._config["macros"]
-        return macros.get(text, macros.get(text.lower(), text))
+        return apply_macro(
+            text,
+            self._config["macros"],
+            self._config["enable_macro"],
+        )
 
     def _sync_preedit(self) -> None:
         """Đồng bộ chuỗi hiển thị từ phần tiếng Việt và phần literal."""

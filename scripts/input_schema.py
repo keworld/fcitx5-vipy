@@ -1,9 +1,7 @@
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-try:
-    from .vietnamese_phonology import VietnamesePhonology
-except ImportError:
-    from vietnamese_phonology import VietnamesePhonology
+
+from .vietnamese_phonology import VietnamesePhonology
 
 @dataclass(frozen=True)
 class Action:
@@ -154,6 +152,7 @@ class VNISchema(InputSchema):
         'u7': 3,
         'd9': 4,
     }
+
     @classmethod
     def name(cls) -> str:
         return 'vni'
