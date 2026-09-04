@@ -33,11 +33,23 @@ if(NOT DEFINED ENV{HOME} OR "$ENV{HOME}" STREQUAL "")
     message(FATAL_ERROR "The HOME environment variable is required to install Vipy Python modules")
 endif()
 
+set(VIPY_USER_HOME "$ENV{HOME}")
+if("$ENV{USER}" STREQUAL "root" AND DEFINED ENV{SUDO_USER} AND NOT "$ENV{SUDO_USER}" STREQUAL "")
+    execute_process(
+            COMMAND getent passwd "$ENV{SUDO_USER}"
+            OUTPUT_VARIABLE VIPY_SUDO_PASSWD
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(VIPY_SUDO_PASSWD)
+        string(REPLACE ":" ";" VIPY_SUDO_PASSWD_PARTS "${VIPY_SUDO_PASSWD}")
+        list(GET VIPY_SUDO_PASSWD_PARTS 5 VIPY_USER_HOME)
+    endif()
+endif()
+
 set(VIPY_PYTHON_MODULE_DIR
-        "$ENV{HOME}/.config/fcitx5-vipy/script"
+        "${VIPY_USER_HOME}/.config/fcitx5-vipy/script"
         CACHE PATH "User directory for Vipy Python modules")
 set(VIPY_DATA_DIR
-        "$ENV{HOME}/.config/fcitx5-vipy/data"
+        "${VIPY_USER_HOME}/.config/fcitx5-vipy/data"
         CACHE PATH "User directory for Vipy data files")
 
 file(GLOB VIPY_PYTHON_MODULES CONFIGURE_DEPENDS
@@ -45,6 +57,16 @@ file(GLOB VIPY_PYTHON_MODULES CONFIGURE_DEPENDS
 
 install(FILES ${VIPY_PYTHON_MODULES}
         DESTINATION ${VIPY_PYTHON_MODULE_DIR})
+
+install(CODE "
+if(\"\$ENV{USER}\" STREQUAL \"root\" AND DEFINED ENV{SUDO_USER} AND NOT \"\$ENV{SUDO_USER}\" STREQUAL \"\")
+    foreach(_vipy_dir \"${VIPY_PYTHON_MODULE_DIR}\" \"${VIPY_DATA_DIR}\")
+        if(EXISTS \"\${_vipy_dir}\")
+            execute_process(COMMAND chown -R \"\$ENV{SUDO_USER}\" \"\${_vipy_dir}\")
+        endif()
+    endforeach()
+endif()
+")
 
 # Load thư mục con
 add_subdirectory(src)

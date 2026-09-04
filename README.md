@@ -38,6 +38,11 @@ mkdir build && cd build
 cmake ..
 make
 ```
+   Khi cài đặt vào hệ thống bằng `sudo`, hãy giữ nguyên người dùng gốc để file `~/.config/fcitx5-vipy` vẫn thuộc quyền của user thường:
+```bash
+sudo -E make install
+```
+   Nếu không dùng `sudo -E`, CMake sẽ tự phát hiện `SUDO_USER` và chown lại các file config về quyền người dùng thực tế sau khi install.
    Nếu muốn tối ưu hóa cho local release build, có thể bật tùy chọn:
 ```bash
 cmake .. -DVIPY_ENABLE_NATIVE_OPTIMIZATIONS=ON
