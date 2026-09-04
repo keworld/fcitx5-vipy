@@ -7,8 +7,6 @@ add_library(vipy MODULE
 
         # Sources
         fcitx5/vipy-icon-resolver.cpp
-        utf8/vietnamese_text.hpp
-        utf8/vietnamese_text.cpp
         python/python_error.cpp
         python/python_runtime.cpp
         python/python_engine.cpp

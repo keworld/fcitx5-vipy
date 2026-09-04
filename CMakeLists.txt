@@ -11,8 +11,16 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "Default install prefix" FORCE)
 endif()
 
-# Cấu hình tối ưu hóa biên dịch
-add_compile_options(-O3 -march=native -flto -fvisibility=hidden -fvisibility-inlines-hidden)
+# Cấu hình tối ưu hóa biên dịch theo hướng build ổn định và portable.
+# -march=native / -flto được bật tùy chọn để dễ publish trên máy local mà không
+# ép buộc mọi distro/CI đều phải build theo CPU target cụ thể.
+option(VIPY_ENABLE_NATIVE_OPTIMIZATIONS "Enable native CPU tuning and LTO for local release builds" OFF)
+
+add_compile_options(-O3 -fvisibility=hidden -fvisibility-inlines-hidden)
+if(VIPY_ENABLE_NATIVE_OPTIMIZATIONS)
+    add_compile_options(-march=native -flto)
+    add_link_options(-flto)
+endif()
 
 include(GNUInstallDirs)
 

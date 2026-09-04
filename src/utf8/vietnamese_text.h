@@ -1,8 +1,0 @@
-//
-// Created by keworld on 9/3/26.
-//
-
-#ifndef FCITX5_VIPY_VIETNAMESE_TEXT_H
-#define FCITX5_VIPY_VIETNAMESE_TEXT_H
-
-#endif //FCITX5_VIPY_VIETNAMESE_TEXT_H

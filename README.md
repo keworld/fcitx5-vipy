@@ -38,6 +38,11 @@ mkdir build && cd build
 cmake ..
 make
 ```
+   Nếu muốn tối ưu hóa cho local release build, có thể bật tùy chọn:
+```bash
+cmake .. -DVIPY_ENABLE_NATIVE_OPTIMIZATIONS=ON
+make
+```
 4. Cài đặt vào hệ thống: 
 ```bash
 sudo make install
