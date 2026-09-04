@@ -12,6 +12,8 @@
 #include <fcitx/instance.h>
 #include <fcitx/menu.h>
 
+#include <memory>
+
 namespace vipy::fcitx_wrapper {
 
 class VietnameseInputMethodEngine final : public fcitx::InputMethodEngineV2 {
@@ -50,6 +52,8 @@ private:
     python::PythonEngine engine_;
     VipyConfig config_;
     fcitx::FactoryFor<VipyState> stateFactory_;
+    std::unique_ptr<fcitx::HandlerTableEntry<fcitx::EventHandler>>
+        contextDestroyedHandler_;
     fcitx::Menu modeMenu_;
     fcitx::SimpleAction modeAction_;
     ModeAction telexAction_;

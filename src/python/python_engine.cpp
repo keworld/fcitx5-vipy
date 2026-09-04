@@ -171,6 +171,12 @@ void PythonEngine::resetState(const void *context) const {
     if (!result) logPythonError("reset");
 }
 
+void PythonEngine::removeContext(const void *context) const {
+    if (!context) return;
+    GilGuard gil;
+    engines_.erase(context);
+}
+
 PyObject *PythonEngine::engineFor(const void *context) const {
     auto it = engines_.find(context);
     if (it != engines_.end()) {

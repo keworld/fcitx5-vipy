@@ -66,6 +66,18 @@ VietnameseInputMethodEngine::VietnameseInputMethodEngine(fcitx::Instance *instan
               setFeatureConfig("enable_auto_decompose",
                                *config_.enableAutoDecompose);
           }) {
+    contextDestroyedHandler_ = instance_->watchEvent(
+            fcitx::EventType::InputContextDestroyed,
+            fcitx::EventWatcherPhase::PostInputMethod, [this](fcitx::Event &event) {
+                auto *inputContextEvent =
+                    dynamic_cast<fcitx::InputContextEvent *>(&event);
+                if (inputContextEvent) {
+                    engine_.removeContext(inputContextEvent->inputContext());
+                }
+            });
+    if (!contextDestroyedHandler_) {
+            FCITX_ERROR() << "Failed to watch input context destruction";
+    }
     reloadConfig();
     registerProperties();
     setupActions();

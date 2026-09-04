@@ -39,6 +39,7 @@ public:
     void reset() const;
     void resetState() const;
     void resetState(const void *context) const;
+    void removeContext(const void *context) const;
 
 private:
     PyObject *engineFor(const void *context) const;
