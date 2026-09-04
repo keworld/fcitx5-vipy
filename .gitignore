@@ -5,3 +5,4 @@ build/
 *.o
 compile_commands.json
 cmake-build-debug/
+/tests/
