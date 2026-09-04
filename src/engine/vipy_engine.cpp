@@ -7,7 +7,29 @@
 #include <fcitx-config/iniparser.h>
 #include <fcitx-utils/log.h>
 
+#include <cstdlib>
+#include <filesystem>
+
 namespace vipy::fcitx_wrapper {
+namespace {
+
+std::string macroFilePath() {
+    const char *home = std::getenv("HOME");
+    const char *xdgConfigHome = std::getenv("XDG_CONFIG_HOME");
+    const std::filesystem::path configHome =
+        (xdgConfigHome && *xdgConfigHome)
+            ? std::filesystem::path(xdgConfigHome)
+            : (home && *home ? std::filesystem::path(home) / ".config"
+                              : std::filesystem::path{});
+    const auto userMacro =
+        configHome / "fcitx5-vipy" / "data" / "vietnamese.macro";
+    if (std::filesystem::is_regular_file(userMacro)) {
+        return userMacro.string();
+    }
+    return std::string(VIPY_DATA_DIR) + "/vietnamese.macro";
+}
+
+} // namespace
 
 VietnameseInputMethodEngine::VietnameseInputMethodEngine(fcitx::Instance *instance)
     : instance_(instance), runtime_(), engine_(runtime_),
@@ -106,8 +128,7 @@ void VietnameseInputMethodEngine::syncPythonConfig() {
     engine_.setConfig("enable_spell_check", *config_.enableSpellCheck);
     engine_.setConfig("enable_macro", *config_.enableMacro);
     engine_.setConfig("enable_auto_decompose", *config_.enableAutoDecompose);
-    engine_.setConfig("macro_file",
-                      std::string(VIPY_DATA_DIR) + "/vietnamese.macro");
+    engine_.setConfig("macro_file", macroFilePath());
 }
 
 void VietnameseInputMethodEngine::setFeatureConfig(const char *key, bool value) {

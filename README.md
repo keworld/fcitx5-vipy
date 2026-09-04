@@ -38,16 +38,21 @@ mkdir build && cd build
 cmake ..
 make
 ```
-   Khi cài đặt vào hệ thống bằng `sudo`, hãy giữ nguyên người dùng gốc để file `~/.config/fcitx5-vipy` vẫn thuộc quyền của user thường:
-```bash
-sudo -E make install
-```
-   Nếu không dùng `sudo -E`, CMake sẽ tự phát hiện `SUDO_USER` và chown lại các file config về quyền người dùng thực tế sau khi install.
+   Các script và dữ liệu mặc định được cài vào `/usr/share/fcitx5-vipy`.
+   Khi chạy, Vipy ưu tiên bản người dùng trong `~/.config/fcitx5-vipy/`
+   (hoặc `$XDG_CONFIG_HOME/fcitx5-vipy/`). Người dùng có thể tự tạo các thư mục
+   `script/` và `data/`, rồi chỉnh sửa hoặc copy Python module, từ điển và macro
+   mà không cần quyền root.
    Nếu muốn tối ưu hóa cho local release build, có thể bật tùy chọn:
 ```bash
 cmake .. -DVIPY_ENABLE_NATIVE_OPTIMIZATIONS=ON
 make
 ```
 4. Cài đặt vào hệ thống: 
-```bash
+```
+
+Khi đóng gói cho Arch Linux, package nên phụ thuộc `python` lúc chạy và
+`librsvg` lúc build (project dùng `rsvg-convert` để tạo status icon). Không
+truyền `VIPY_PYTHON_MODULE_DIR` hoặc `VIPY_DATA_DIR` trỏ vào thư mục home của
+máy build.bash
 sudo make install

@@ -29,44 +29,25 @@ find_package(Fcitx5Utils REQUIRED)
 find_package(Fcitx5Core REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Embed)
 
-if(NOT DEFINED ENV{HOME} OR "$ENV{HOME}" STREQUAL "")
-    message(FATAL_ERROR "The HOME environment variable is required to install Vipy Python modules")
+if(VIPY_PYTHON_MODULE_DIR MATCHES "/\\.config/fcitx5-vipy/script$")
+    unset(VIPY_PYTHON_MODULE_DIR CACHE)
 endif()
-
-set(VIPY_USER_HOME "$ENV{HOME}")
-if("$ENV{USER}" STREQUAL "root" AND DEFINED ENV{SUDO_USER} AND NOT "$ENV{SUDO_USER}" STREQUAL "")
-    execute_process(
-            COMMAND getent passwd "$ENV{SUDO_USER}"
-            OUTPUT_VARIABLE VIPY_SUDO_PASSWD
-            OUTPUT_STRIP_TRAILING_WHITESPACE)
-    if(VIPY_SUDO_PASSWD)
-        string(REPLACE ":" ";" VIPY_SUDO_PASSWD_PARTS "${VIPY_SUDO_PASSWD}")
-        list(GET VIPY_SUDO_PASSWD_PARTS 5 VIPY_USER_HOME)
-    endif()
+if(VIPY_DATA_DIR MATCHES "/\\.config/fcitx5-vipy/data$")
+    unset(VIPY_DATA_DIR CACHE)
 endif()
 
 set(VIPY_PYTHON_MODULE_DIR
-        "${VIPY_USER_HOME}/.config/fcitx5-vipy/script"
-        CACHE PATH "User directory for Vipy Python modules")
+        "${CMAKE_INSTALL_DATADIR}/fcitx5-vipy/script"
+        CACHE PATH "System directory for Vipy Python modules")
 set(VIPY_DATA_DIR
-        "${VIPY_USER_HOME}/.config/fcitx5-vipy/data"
-        CACHE PATH "User directory for Vipy data files")
+        "${CMAKE_INSTALL_DATADIR}/fcitx5-vipy/data"
+        CACHE PATH "System directory for Vipy data files")
 
 file(GLOB VIPY_PYTHON_MODULES CONFIGURE_DEPENDS
         "${CMAKE_SOURCE_DIR}/scripts/*.py")
 
 install(FILES ${VIPY_PYTHON_MODULES}
         DESTINATION ${VIPY_PYTHON_MODULE_DIR})
-
-install(CODE "
-if(\"\$ENV{USER}\" STREQUAL \"root\" AND DEFINED ENV{SUDO_USER} AND NOT \"\$ENV{SUDO_USER}\" STREQUAL \"\")
-    foreach(_vipy_dir \"${VIPY_PYTHON_MODULE_DIR}\" \"${VIPY_DATA_DIR}\")
-        if(EXISTS \"\${_vipy_dir}\")
-            execute_process(COMMAND chown -R \"\$ENV{SUDO_USER}\" \"\${_vipy_dir}\")
-        endif()
-    endforeach()
-endif()
-")
 
 # Load thư mục con
 add_subdirectory(src)

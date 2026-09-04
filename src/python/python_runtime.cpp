@@ -4,6 +4,7 @@
 
 #include <dlfcn.h>
 #include <cstdlib>
+#include <filesystem>
 
 #include <iostream>
 
@@ -29,14 +30,34 @@ void *makePythonSymbolsGlobal() {
 } // namespace
 
 PythonRuntime::PythonRuntime() : handle_(makePythonSymbolsGlobal()) {
-    setenv("FCITX_TELEX_DICT", VIPY_DATA_DIR "/vietnamese.cm.dict", 0);
+    const char *home = std::getenv("HOME");
+    const char *xdgConfigHome = std::getenv("XDG_CONFIG_HOME");
+    const std::filesystem::path configHome =
+        (xdgConfigHome && *xdgConfigHome)
+            ? std::filesystem::path(xdgConfigHome)
+            : (home && *home ? std::filesystem::path(home) / ".config"
+                              : std::filesystem::path{});
+    const auto userRoot = configHome / "fcitx5-vipy";
+    const auto userScript = userRoot / "script";
+    const auto userDict = userRoot / "data" / "vietnamese.cm.dict";
+    const std::string dictPath =
+        std::filesystem::is_regular_file(userDict)
+            ? userDict.string()
+            : std::string(VIPY_DATA_DIR) + "/vietnamese.cm.dict";
+    setenv("FCITX_TELEX_DICT", dictPath.c_str(), 1);
     Py_Initialize();
     GilGuard gil;
     PyObject *path = PySys_GetObject("path");
-    PyObject *insertResult =
-        path ? PyObject_CallMethod(path, "insert", "is", 0,
-                                   VIPY_PYTHON_MODULE_DIR)
-             : nullptr;
+    PyObject *insertResult = nullptr;
+    if (path) {
+        insertResult =
+            PyObject_CallMethod(path, "insert", "is", 0, VIPY_PYTHON_MODULE_DIR);
+        if (insertResult && std::filesystem::is_directory(userScript)) {
+            Py_DECREF(insertResult);
+            insertResult =
+                PyObject_CallMethod(path, "insert", "is", 0, userScript.c_str());
+        }
+    }
     if (!insertResult) {
         if (path) {
             logPythonError("adding Python module path");
