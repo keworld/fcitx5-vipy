@@ -39,10 +39,11 @@ cmake ..
 make
 ```
    Các script và dữ liệu mặc định được cài vào `/usr/share/fcitx5-vipy`.
-   Khi chạy, Vipy ưu tiên bản người dùng trong `~/.config/fcitx5-vipy/`
-   (hoặc `$XDG_CONFIG_HOME/fcitx5-vipy/`). Người dùng có thể tự tạo các thư mục
-   `script/` và `data/`, rồi chỉnh sửa hoặc copy Python module, từ điển và macro
-   mà không cần quyền root.
+   Ở lần chạy đầu tiên, Vipy tự copy các file mặc định vào
+   `~/.config/fcitx5-vipy/` (hoặc `$XDG_CONFIG_HOME/fcitx5-vipy/`). Python
+   script, từ điển và macro trong thư mục này được ưu tiên tuyệt đối, nên người
+   dùng chỉ cần sửa file rồi restart Fcitx5; không cần biên dịch hoặc cài lại
+   addon. File mặc định chỉ được copy khi file user chưa tồn tại.
    Nếu muốn tối ưu hóa cho local release build, có thể bật tùy chọn:
 ```bash
 cmake .. -DVIPY_ENABLE_NATIVE_OPTIMIZATIONS=ON

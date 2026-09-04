@@ -11,6 +11,70 @@
 namespace vipy::python {
 namespace {
 
+std::filesystem::path userConfigRoot() {
+    const char *home = std::getenv("HOME");
+    const char *xdgConfigHome = std::getenv("XDG_CONFIG_HOME");
+    const std::filesystem::path configHome =
+        (xdgConfigHome && *xdgConfigHome)
+            ? std::filesystem::path(xdgConfigHome)
+            : (home && *home ? std::filesystem::path(home) / ".config"
+                              : std::filesystem::path{});
+    return configHome / "fcitx5-vipy";
+}
+
+void installUserDefaults(const std::filesystem::path &userRoot) {
+    if (userRoot.empty() ||
+        !std::filesystem::is_directory(VIPY_PYTHON_MODULE_DIR)) {
+        return;
+    }
+
+    std::error_code error;
+    std::filesystem::create_directories(userRoot / "script", error);
+    if (error) {
+        std::cerr << "Cannot create Vipy user script directory: "
+                  << error.message() << '\n';
+        return;
+    }
+    std::filesystem::create_directories(userRoot / "data", error);
+    if (error) {
+        std::cerr << "Cannot create Vipy user data directory: "
+                  << error.message() << '\n';
+        return;
+    }
+
+    for (const auto &entry :
+         std::filesystem::directory_iterator(VIPY_PYTHON_MODULE_DIR, error)) {
+        if (error) {
+            std::cerr << "Cannot inspect Vipy system script directory: "
+                      << error.message() << '\n';
+            return;
+        }
+        if (entry.is_regular_file() && entry.path().extension() == ".py") {
+            std::filesystem::copy_file(
+                entry.path(), userRoot / "script" / entry.path().filename(),
+                std::filesystem::copy_options::skip_existing, error);
+            if (error) {
+                std::cerr << "Cannot copy Vipy Python module "
+                          << entry.path().filename() << ": "
+                          << error.message() << '\n';
+                error.clear();
+            }
+        }
+    }
+
+    for (const char *name : {"vietnamese.cm.dict", "vietnamese.macro"}) {
+        std::filesystem::copy_file(
+            std::filesystem::path(VIPY_DATA_DIR) / name,
+            userRoot / "data" / name,
+            std::filesystem::copy_options::skip_existing, error);
+        if (error) {
+            std::cerr << "Cannot copy Vipy data file " << name << ": "
+                      << error.message() << '\n';
+            error.clear();
+        }
+    }
+}
+
 void *makePythonSymbolsGlobal() {
     Dl_info info{};
     if (!dladdr(reinterpret_cast<void *>(&Py_Initialize), &info) ||
@@ -30,14 +94,8 @@ void *makePythonSymbolsGlobal() {
 } // namespace
 
 PythonRuntime::PythonRuntime() : handle_(makePythonSymbolsGlobal()) {
-    const char *home = std::getenv("HOME");
-    const char *xdgConfigHome = std::getenv("XDG_CONFIG_HOME");
-    const std::filesystem::path configHome =
-        (xdgConfigHome && *xdgConfigHome)
-            ? std::filesystem::path(xdgConfigHome)
-            : (home && *home ? std::filesystem::path(home) / ".config"
-                              : std::filesystem::path{});
-    const auto userRoot = configHome / "fcitx5-vipy";
+    const auto userRoot = userConfigRoot();
+    installUserDefaults(userRoot);
     const auto userScript = userRoot / "script";
     const auto userDict = userRoot / "data" / "vietnamese.cm.dict";
     const std::string dictPath =

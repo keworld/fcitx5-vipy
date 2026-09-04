@@ -14,8 +14,8 @@ namespace vipy::fcitx_wrapper {
 namespace {
 
 std::string macroFilePath() {
-    const char *home = std::getenv("HOME");
     const char *xdgConfigHome = std::getenv("XDG_CONFIG_HOME");
+    const char *home = std::getenv("HOME");
     const std::filesystem::path configHome =
         (xdgConfigHome && *xdgConfigHome)
             ? std::filesystem::path(xdgConfigHome)
